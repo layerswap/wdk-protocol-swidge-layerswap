@@ -1,0 +1,19 @@
+{
+  "name": "@layerswap/wdk-bridge-layerswap-test-app",
+  "version": "0.1.0",
+  "description": "CLI workspace package for exercising @layerswap/wdk-protocol-bridge-layerswap-evm end-to-end against a real Layerswap endpoint.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node src/cli.mjs",
+    "networks": "node src/cli.mjs networks",
+    "quote": "node src/cli.mjs quote",
+    "bridge": "node src/cli.mjs bridge",
+    "status": "node src/cli.mjs status"
+  },
+  "dependencies": {
+    "@layerswap/wdk-protocol-bridge-layerswap-evm": "workspace:*",
+    "@tetherto/wdk-wallet": "1.0.0-beta.8",
+    "@tetherto/wdk-wallet-evm": "1.0.0-beta.12"
+  }
+}
