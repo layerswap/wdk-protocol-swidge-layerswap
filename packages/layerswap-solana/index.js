@@ -14,10 +14,10 @@
 
 /** @typedef {import('@tetherto/wdk-wallet/protocols').BridgeResult} BridgeResult */
 
-/** @typedef {import('./src/layerswap-protocol-evm.js').LayerswapProtocolConfig} LayerswapProtocolConfig */
+/** @typedef {import('./src/layerswap-protocol-solana.js').LayerswapProtocolConfig} LayerswapProtocolConfig */
 
-/** @typedef {import('./src/layerswap-protocol-evm.js').BridgeOptions} BridgeOptions */
+/** @typedef {import('./src/layerswap-protocol-solana.js').BridgeOptions} BridgeOptions */
 
-/** @typedef {import('./src/layerswap-protocol-evm.js').LayerswapBridgeResult} LayerswapBridgeResult */
+/** @typedef {import('./src/layerswap-protocol-solana.js').LayerswapBridgeResult} LayerswapBridgeResult */
 
-export { default } from './src/layerswap-protocol-evm.js'
+export { default } from './src/layerswap-protocol-solana.js'

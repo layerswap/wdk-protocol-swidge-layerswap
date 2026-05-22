@@ -12,5 +12,10 @@
     "test:coverage": "pnpm -r --if-present run test:coverage",
     "build:types": "pnpm -r --if-present run build:types"
   },
-  "packageManager": "pnpm@10.32.1"
+  "packageManager": "pnpm@10.32.1",
+  "pnpm": {
+    "overrides": {
+      "uuid": "^9.0.1"
+    }
+  }
 }

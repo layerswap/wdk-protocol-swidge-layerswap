@@ -1,0 +1,53 @@
+{
+  "name": "@layerswap/wdk-protocol-bridge-layerswap-core",
+  "version": "1.0.0-beta.1",
+  "description": "Chain-agnostic Layerswap HTTP client and network/decimal helpers shared by every @layerswap/wdk-protocol-bridge-layerswap-<vm> sibling package.",
+  "keywords": [
+    "wdk",
+    "protocol",
+    "bridge",
+    "layerswap",
+    "core"
+  ],
+  "author": "Aren <aren@bransfer.io>",
+  "license": "Apache-2.0",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "build:types": "tsc",
+    "lint": "standard",
+    "lint:fix": "standard --fix",
+    "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest",
+    "test:coverage": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --coverage"
+  },
+  "dependencies": {
+    "bare-node-runtime": "^1.1.4"
+  },
+  "devDependencies": {
+    "cross-env": "10.0.0",
+    "jest": "30.0.5",
+    "standard": "17.1.2",
+    "typescript": "5.8.3"
+  },
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts",
+      "bare": "./bare.js",
+      "default": "./index.js"
+    },
+    "./package": {
+      "default": "./package.json"
+    }
+  },
+  "standard": {
+    "ignore": [
+      "bare.js",
+      "tests/**/*.js",
+      "tests/**/*.mjs",
+      "types/**/*"
+    ]
+  },
+  "directories": {
+    "test": "tests"
+  }
+}

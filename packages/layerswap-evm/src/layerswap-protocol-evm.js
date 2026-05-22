@@ -15,35 +15,34 @@
 'use strict'
 
 import { BridgeProtocol } from '@tetherto/wdk-wallet/protocols'
-import { WalletAccountEvm } from '@tetherto/wdk-wallet-evm'
-import { WalletAccountEvmErc4337 } from '@tetherto/wdk-wallet-evm-erc-4337'
 import { JsonRpcProvider, BrowserProvider } from 'ethers'
 
-import LayerswapApiClient from './layerswap-api-client.js'
-import {
+import LayerswapApiClient, {
   resolveSourceNetwork,
   resolveNetworkByName,
   resolveToken,
   formatBaseUnits,
   parseDecimal
-} from './networks.js'
+} from '@layerswap/wdk-protocol-bridge-layerswap-core'
 
 /** @typedef {import('@tetherto/wdk-wallet/protocols').BridgeProtocolConfig} BridgeProtocolConfig */
 /** @typedef {import('@tetherto/wdk-wallet/protocols').BridgeResult} BridgeResult */
 
+/** @typedef {import('@tetherto/wdk-wallet-evm').WalletAccountEvm} WalletAccountEvm */
 /** @typedef {import('@tetherto/wdk-wallet-evm').WalletAccountReadOnlyEvm} WalletAccountReadOnlyEvm */
 
+/** @typedef {import('@tetherto/wdk-wallet-evm-erc-4337').WalletAccountEvmErc4337} WalletAccountEvmErc4337 */
 /** @typedef {import('@tetherto/wdk-wallet-evm-erc-4337').WalletAccountReadOnlyEvmErc4337} WalletAccountReadOnlyEvmErc4337 */
 
 /** @typedef {import('@tetherto/wdk-wallet-evm-erc-4337').EvmErc4337WalletPaymasterTokenConfig} EvmErc4337WalletPaymasterTokenConfig */
 /** @typedef {import('@tetherto/wdk-wallet-evm-erc-4337').EvmErc4337WalletSponsorshipPolicyConfig} EvmErc4337WalletSponsorshipPolicyConfig */
 /** @typedef {import('@tetherto/wdk-wallet-evm-erc-4337').EvmErc4337WalletNativeCoinsConfig} EvmErc4337WalletNativeCoinsConfig */
 
-/** @typedef {import('./layerswap-api-client.js').LayerswapNetwork} LayerswapNetwork */
-/** @typedef {import('./layerswap-api-client.js').LayerswapToken} LayerswapToken */
-/** @typedef {import('./layerswap-api-client.js').LayerswapDepositAction} LayerswapDepositAction */
-/** @typedef {import('./layerswap-api-client.js').LayerswapSwap} LayerswapSwap */
-/** @typedef {import('./layerswap-api-client.js').LayerswapQuote} LayerswapQuote */
+/** @typedef {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapNetwork} LayerswapNetwork */
+/** @typedef {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapToken} LayerswapToken */
+/** @typedef {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapDepositAction} LayerswapDepositAction */
+/** @typedef {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapSwap} LayerswapSwap */
+/** @typedef {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapQuote} LayerswapQuote */
 
 /**
  * @typedef {Object} LayerswapProtocolConfig
@@ -159,7 +158,7 @@ export default class LayerswapProtocolEvm extends BridgeProtocol {
    * @returns {Promise<LayerswapBridgeResult>} The bridge's result, augmented with the Layerswap swap id.
    */
   async bridge (options, config) {
-    if (!(this._account instanceof WalletAccountEvm) && !(this._account instanceof WalletAccountEvmErc4337)) {
+    if (!this._isWritableAccount(this._account)) {
       throw new Error("The 'bridge(options)' method requires the protocol to be initialized with a non read-only account.")
     }
 
@@ -169,7 +168,7 @@ export default class LayerswapProtocolEvm extends BridgeProtocol {
 
     const { depositTx, bridgeFee, swapId } = await this._buildDepositTransaction(options)
 
-    if (this._account instanceof WalletAccountEvmErc4337) {
+    if (this._isErc4337Account(this._account)) {
       const { bridgeMaxFee } = { ...this._config, ...config }
 
       if (bridgeMaxFee !== undefined && bridgeFee >= BigInt(bridgeMaxFee)) {
@@ -225,7 +224,7 @@ export default class LayerswapProtocolEvm extends BridgeProtocol {
       destination_network: destinationNetwork.name,
       destination_token: destinationToken.symbol,
       amount: amountDecimal,
-      use_deposit_address: true,
+      use_deposit_address: false,
       source_address: sourceAddress,
       refuel: options.refuel,
       slippage: options.slippage
@@ -261,7 +260,7 @@ export default class LayerswapProtocolEvm extends BridgeProtocol {
 
     const sourceAddress = await this._account.getAddress()
 
-    /** @type {import('./layerswap-api-client.js').LayerswapSwapResponse} */
+    /** @type {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapSwapResponse} */
     const response = await this._client.createSwap({
       source_network: sourceNetwork.name,
       source_token: sourceToken.symbol,
@@ -409,6 +408,40 @@ export default class LayerswapProtocolEvm extends BridgeProtocol {
     const network = await this._provider.getNetwork()
     this._chainId = network.chainId
     return this._chainId
+  }
+
+  /**
+   * Tests whether the bound account is a writable EVM wallet account
+   * (i.e. exposes `sendTransaction` as a callable). This is a duck-type check
+   * rather than an `instanceof WalletAccountEvm | WalletAccountEvmErc4337`
+   * check because pnpm-workspace setups can resolve `@tetherto/wdk-wallet-evm`
+   * (and -erc-4337) to a different copy than this package's own when the dep
+   * tree's peer-dep contexts diverge — `instanceof` would then fail on a
+   * structurally-correct account.
+   *
+   * @private
+   * @param {unknown} account
+   * @returns {boolean}
+   */
+  _isWritableAccount (account) {
+    return Boolean(account && typeof account === 'object' && typeof account.sendTransaction === 'function')
+  }
+
+  /**
+   * Tests whether the bound account is an ERC-4337 wallet account. Distinguishes
+   * the routing in `bridge()` — ERC-4337 uses the array-form `sendTransaction([tx], config)`,
+   * standard EVM uses single-form `sendTransaction(tx)`. Matched by class name (preserved
+   * across duplicate copies of the wallet package) to dodge the same duplicate-copy
+   * `instanceof` failure as `_isWritableAccount`.
+   *
+   * @private
+   * @param {unknown} account
+   * @returns {boolean}
+   */
+  _isErc4337Account (account) {
+    const proto = account != null ? Object.getPrototypeOf(account) : null
+    const ctor = proto && proto.constructor
+    return Boolean(ctor && ctor.name === 'WalletAccountEvmErc4337')
   }
 
   /**

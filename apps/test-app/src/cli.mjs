@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 
-// CLI for exercising the Layerswap WDK bridge protocol end-to-end.
+// CLI for exercising the Layerswap WDK bridge protocols end-to-end.
+//
+// Usage:
+//   cli.mjs [--vm <evm|solana>] <command> [args]
 //
 // Subcommands:
 //   networks                Lists Layerswap networks the configured endpoint supports.
@@ -8,25 +11,74 @@
 //   bridge                  Calls quoteBridge, then bridge, then polls until terminal.
 //   status <swapId>         Polls GET /swaps/<id> once and prints the result.
 //
-// Configuration: copy .env.example → .env, fill values, then `node --env-file=.env src/cli.mjs <cmd>`
-// or export env vars directly.
+// VM dispatch:
+//   --vm evm     (default) Uses @layerswap/wdk-protocol-bridge-layerswap-evm with
+//                @tetherto/wdk-wallet-evm.
+//   --vm solana  Uses @layerswap/wdk-protocol-bridge-layerswap-solana with
+//                @tetherto/wdk-wallet-solana. Note: LAYERSWAP_DERIVATION_PATH segments
+//                must all be hardened (e.g. "0'/0'/0'"); the default unhardened EVM
+//                path is rejected by the Solana wallet and is auto-replaced with
+//                "0'/0'/0'".
+//
+// Configuration: copy .env.example → .env, fill values, then
+//   `node --env-file=.env src/cli.mjs [--vm <vm>] <cmd>`
 
-import LayerswapEvm, { LayerswapApiClient } from '@layerswap/wdk-protocol-bridge-layerswap-evm'
+import { LayerswapApiClient } from '@layerswap/wdk-protocol-bridge-layerswap-core'
 
 import { loadConfig, required } from './config.mjs'
-import { buildAccount } from './account.mjs'
 
 const TERMINAL = new Set(['completed', 'failed', 'expired', 'cancelled', 'refunded'])
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 function printHelp () {
-  console.log('Usage: cli.mjs <command> [args]')
+  console.log('Usage: cli.mjs [--vm <evm|solana>] <command> [args]')
   console.log('Commands:')
   console.log('  networks                List Layerswap networks at the configured endpoint.')
   console.log('  quote                   Get a quote for the env-configured route.')
   console.log('  bridge                  Submit a bridge and poll until completion.')
   console.log('  status <swapId>         Poll a single swap once and print its state.')
+}
+
+function parseArgs (argv) {
+  const out = { vm: 'evm', rest: [] }
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]
+    if (arg === '--vm') {
+      out.vm = argv[++i]
+      if (!out.vm) {
+        console.error('Missing value for --vm.')
+        process.exit(1)
+      }
+    } else if (arg && arg.startsWith('--vm=')) {
+      out.vm = arg.slice('--vm='.length)
+    } else {
+      out.rest.push(arg)
+    }
+  }
+  if (!['evm', 'solana'].includes(out.vm)) {
+    console.error(`Unknown --vm '${out.vm}'. Expected 'evm' or 'solana'.`)
+    process.exit(1)
+  }
+  return out
+}
+
+async function loadVm (vm) {
+  if (vm === 'evm') {
+    const [{ default: LayerswapEvm }, accountMod] = await Promise.all([
+      import('@layerswap/wdk-protocol-bridge-layerswap-evm'),
+      import('./account-evm.mjs')
+    ])
+    return { Protocol: LayerswapEvm, buildAccount: accountMod.buildAccount }
+  }
+  if (vm === 'solana') {
+    const [{ default: LayerswapSolana }, accountMod] = await Promise.all([
+      import('@layerswap/wdk-protocol-bridge-layerswap-solana'),
+      import('./account-solana.mjs')
+    ])
+    return { Protocol: LayerswapSolana, buildAccount: accountMod.buildAccount }
+  }
+  throw new Error(`Unsupported VM '${vm}'.`)
 }
 
 async function cmdNetworks () {
@@ -42,15 +94,16 @@ async function cmdNetworks () {
   }
 }
 
-async function cmdQuote () {
+async function cmdQuote (vm) {
   const cfg = loadConfig()
   required('LAYERSWAP_TARGET_CHAIN')
   required('LAYERSWAP_SOURCE_TOKEN')
   required('LAYERSWAP_AMOUNT')
 
+  const { Protocol, buildAccount } = await loadVm(vm)
   const account = await buildAccount(cfg)
   const address = await account.getAddress()
-  const protocol = new LayerswapEvm(account, { apiUrl: cfg.apiUrl, apiKey: cfg.apiKey })
+  const protocol = new Protocol(account, { apiUrl: cfg.apiUrl, apiKey: cfg.apiKey })
 
   const amount = BigInt(cfg.amountStr)
   const options = {
@@ -62,7 +115,7 @@ async function cmdQuote () {
     sourceChain: cfg.sourceChainOverride
   }
 
-  console.log('Quoting route:')
+  console.log(`Quoting route (vm=${vm}):`)
   console.log('  source address  :', address)
   console.log('  target chain    :', options.targetChain)
   console.log('  source token    :', options.token)
@@ -72,19 +125,20 @@ async function cmdQuote () {
 
   const result = await protocol.quoteBridge(options)
   console.log('Result:')
-  console.log('  fee (source-chain gas, wei)        :', result.fee.toString())
-  console.log('  bridgeFee (source-token base units):', result.bridgeFee.toString())
+  console.log('  fee (source-chain gas, native units) :', result.fee.toString())
+  console.log('  bridgeFee (source-token base units)  :', result.bridgeFee.toString())
 }
 
-async function cmdBridge () {
+async function cmdBridge (vm) {
   const cfg = loadConfig()
   required('LAYERSWAP_TARGET_CHAIN')
   required('LAYERSWAP_SOURCE_TOKEN')
   required('LAYERSWAP_AMOUNT')
 
+  const { Protocol, buildAccount } = await loadVm(vm)
   const account = await buildAccount(cfg)
   const address = await account.getAddress()
-  const protocol = new LayerswapEvm(account, { apiUrl: cfg.apiUrl, apiKey: cfg.apiKey })
+  const protocol = new Protocol(account, { apiUrl: cfg.apiUrl, apiKey: cfg.apiKey })
 
   const amount = BigInt(cfg.amountStr)
   const options = {
@@ -96,7 +150,7 @@ async function cmdBridge () {
     sourceChain: cfg.sourceChainOverride
   }
 
-  console.log('Bridging:')
+  console.log(`Bridging (vm=${vm}):`)
   console.log('  source address  :', address)
   console.log('  target chain    :', options.targetChain)
   console.log('  source token    :', options.token)
@@ -172,13 +226,14 @@ async function cmdStatus (swapId) {
 }
 
 async function main () {
-  const [command, ...args] = process.argv.slice(2)
+  const { vm, rest } = parseArgs(process.argv.slice(2))
+  const [command, ...args] = rest
 
   switch (command) {
     case 'networks': await cmdNetworks(); break
-    case 'quote':    await cmdQuote(); break
-    case 'bridge':   await cmdBridge(); break
-    case 'status':   await cmdStatus(args[0]); break
+    case 'quote': await cmdQuote(vm); break
+    case 'bridge': await cmdBridge(vm); break
+    case 'status': await cmdStatus(args[0]); break
     case undefined:
     case 'help':
     case '--help':

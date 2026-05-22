@@ -1,15 +1,17 @@
 /** @typedef {import('@tetherto/wdk-wallet/protocols').BridgeProtocolConfig} BridgeProtocolConfig */
 /** @typedef {import('@tetherto/wdk-wallet/protocols').BridgeResult} BridgeResult */
+/** @typedef {import('@tetherto/wdk-wallet-evm').WalletAccountEvm} WalletAccountEvm */
 /** @typedef {import('@tetherto/wdk-wallet-evm').WalletAccountReadOnlyEvm} WalletAccountReadOnlyEvm */
+/** @typedef {import('@tetherto/wdk-wallet-evm-erc-4337').WalletAccountEvmErc4337} WalletAccountEvmErc4337 */
 /** @typedef {import('@tetherto/wdk-wallet-evm-erc-4337').WalletAccountReadOnlyEvmErc4337} WalletAccountReadOnlyEvmErc4337 */
 /** @typedef {import('@tetherto/wdk-wallet-evm-erc-4337').EvmErc4337WalletPaymasterTokenConfig} EvmErc4337WalletPaymasterTokenConfig */
 /** @typedef {import('@tetherto/wdk-wallet-evm-erc-4337').EvmErc4337WalletSponsorshipPolicyConfig} EvmErc4337WalletSponsorshipPolicyConfig */
 /** @typedef {import('@tetherto/wdk-wallet-evm-erc-4337').EvmErc4337WalletNativeCoinsConfig} EvmErc4337WalletNativeCoinsConfig */
-/** @typedef {import('./layerswap-api-client.js').LayerswapNetwork} LayerswapNetwork */
-/** @typedef {import('./layerswap-api-client.js').LayerswapToken} LayerswapToken */
-/** @typedef {import('./layerswap-api-client.js').LayerswapDepositAction} LayerswapDepositAction */
-/** @typedef {import('./layerswap-api-client.js').LayerswapSwap} LayerswapSwap */
-/** @typedef {import('./layerswap-api-client.js').LayerswapQuote} LayerswapQuote */
+/** @typedef {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapNetwork} LayerswapNetwork */
+/** @typedef {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapToken} LayerswapToken */
+/** @typedef {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapDepositAction} LayerswapDepositAction */
+/** @typedef {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapSwap} LayerswapSwap */
+/** @typedef {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapQuote} LayerswapQuote */
 /**
  * @typedef {Object} LayerswapProtocolConfig
  * @property {string} [apiKey]                - Optional Layerswap API key. When set, sent as the
@@ -171,6 +173,32 @@ export default class LayerswapProtocolEvm extends BridgeProtocol {
      */
     private _getChainId;
     /**
+     * Tests whether the bound account is a writable EVM wallet account
+     * (i.e. exposes `sendTransaction` as a callable). This is a duck-type check
+     * rather than an `instanceof WalletAccountEvm | WalletAccountEvmErc4337`
+     * check because pnpm-workspace setups can resolve `@tetherto/wdk-wallet-evm`
+     * (and -erc-4337) to a different copy than this package's own when the dep
+     * tree's peer-dep contexts diverge — `instanceof` would then fail on a
+     * structurally-correct account.
+     *
+     * @private
+     * @param {unknown} account
+     * @returns {boolean}
+     */
+    private _isWritableAccount;
+    /**
+     * Tests whether the bound account is an ERC-4337 wallet account. Distinguishes
+     * the routing in `bridge()` — ERC-4337 uses the array-form `sendTransaction([tx], config)`,
+     * standard EVM uses single-form `sendTransaction(tx)`. Matched by class name (preserved
+     * across duplicate copies of the wallet package) to dodge the same duplicate-copy
+     * `instanceof` failure as `_isWritableAccount`.
+     *
+     * @private
+     * @param {unknown} account
+     * @returns {boolean}
+     */
+    private _isErc4337Account;
+    /**
      * Informs Layerswap that the deposit has been broadcast. Best-effort — failures are
      * swallowed because Layerswap's watcher will still detect the on-chain deposit on its
      * own. Awaited (rather than fire-and-forget) so the API call's lifetime is bounded by
@@ -185,16 +213,18 @@ export default class LayerswapProtocolEvm extends BridgeProtocol {
 }
 export type BridgeProtocolConfig = import("@tetherto/wdk-wallet/protocols").BridgeProtocolConfig;
 export type BridgeResult = import("@tetherto/wdk-wallet/protocols").BridgeResult;
+export type WalletAccountEvm = import("@tetherto/wdk-wallet-evm").WalletAccountEvm;
 export type WalletAccountReadOnlyEvm = import("@tetherto/wdk-wallet-evm").WalletAccountReadOnlyEvm;
+export type WalletAccountEvmErc4337 = import("@tetherto/wdk-wallet-evm-erc-4337").WalletAccountEvmErc4337;
 export type WalletAccountReadOnlyEvmErc4337 = import("@tetherto/wdk-wallet-evm-erc-4337").WalletAccountReadOnlyEvmErc4337;
 export type EvmErc4337WalletPaymasterTokenConfig = import("@tetherto/wdk-wallet-evm-erc-4337").EvmErc4337WalletPaymasterTokenConfig;
 export type EvmErc4337WalletSponsorshipPolicyConfig = import("@tetherto/wdk-wallet-evm-erc-4337").EvmErc4337WalletSponsorshipPolicyConfig;
 export type EvmErc4337WalletNativeCoinsConfig = import("@tetherto/wdk-wallet-evm-erc-4337").EvmErc4337WalletNativeCoinsConfig;
-export type LayerswapNetwork = import("./layerswap-api-client.js").LayerswapNetwork;
-export type LayerswapToken = import("./layerswap-api-client.js").LayerswapToken;
-export type LayerswapDepositAction = import("./layerswap-api-client.js").LayerswapDepositAction;
-export type LayerswapSwap = import("./layerswap-api-client.js").LayerswapSwap;
-export type LayerswapQuote = import("./layerswap-api-client.js").LayerswapQuote;
+export type LayerswapNetwork = import("@layerswap/wdk-protocol-bridge-layerswap-core").LayerswapNetwork;
+export type LayerswapToken = import("@layerswap/wdk-protocol-bridge-layerswap-core").LayerswapToken;
+export type LayerswapDepositAction = import("@layerswap/wdk-protocol-bridge-layerswap-core").LayerswapDepositAction;
+export type LayerswapSwap = import("@layerswap/wdk-protocol-bridge-layerswap-core").LayerswapSwap;
+export type LayerswapQuote = import("@layerswap/wdk-protocol-bridge-layerswap-core").LayerswapQuote;
 export type LayerswapProtocolConfig = {
     /**
      * - Optional Layerswap API key. When set, sent as the
@@ -269,6 +299,4 @@ export type LayerswapBridgeResult = BridgeResult & {
     swapId: string;
 };
 import { BridgeProtocol } from '@tetherto/wdk-wallet/protocols';
-import LayerswapApiClient from './layerswap-api-client.js';
-import { WalletAccountEvm } from '@tetherto/wdk-wallet-evm';
-import { WalletAccountEvmErc4337 } from '@tetherto/wdk-wallet-evm-erc-4337';
+import LayerswapApiClient from '@layerswap/wdk-protocol-bridge-layerswap-core';

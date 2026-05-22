@@ -12,12 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/** @typedef {import('@tetherto/wdk-wallet/protocols').BridgeResult} BridgeResult */
+'use strict'
 
-/** @typedef {import('./src/layerswap-protocol-evm.js').LayerswapProtocolConfig} LayerswapProtocolConfig */
+import 'bare-node-runtime/global'
 
-/** @typedef {import('./src/layerswap-protocol-evm.js').BridgeOptions} BridgeOptions */
+export * from './index.js' with { imports: 'bare-node-runtime/imports' }
 
-/** @typedef {import('./src/layerswap-protocol-evm.js').LayerswapBridgeResult} LayerswapBridgeResult */
-
-export { default } from './src/layerswap-protocol-evm.js'
+export { default } from './index.js' with { imports: 'bare-node-runtime/imports' }

@@ -1,14 +1,13 @@
 {
-  "name": "@layerswap/wdk-protocol-bridge-layerswap-evm",
+  "name": "@layerswap/wdk-protocol-bridge-layerswap-solana",
   "version": "1.0.0-beta.1",
-  "description": "WDK module that lets @tetherto/wdk-wallet-evm and wallet-evm-erc-4337 wallet accounts bridge tokens across chains via the Layerswap public API.",
+  "description": "WDK module that lets @tetherto/wdk-wallet-solana wallet accounts bridge tokens across chains via the Layerswap public API.",
   "keywords": [
     "wdk",
     "protocol",
     "bridge",
     "layerswap",
-    "evm",
-    "erc-4337"
+    "solana"
   ],
   "author": "Aren <aren@bransfer.io>",
   "license": "Apache-2.0",
@@ -19,28 +18,20 @@
     "lint": "standard",
     "lint:fix": "standard --fix",
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest",
-    "test:coverage": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --coverage",
-    "test:e2e": "node tests/integration/bridge-testnet.mjs"
+    "test:coverage": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --coverage"
   },
   "dependencies": {
     "@layerswap/wdk-protocol-bridge-layerswap-core": "workspace:*",
-    "bare-node-runtime": "^1.1.4",
-    "ethers": "6.13.5"
+    "@solana/web3.js": "1.95.8",
+    "bare-node-runtime": "^1.1.4"
   },
   "peerDependencies": {
     "@tetherto/wdk-wallet": ">=1.0.0-beta.7",
-    "@tetherto/wdk-wallet-evm": ">=1.0.0-beta.10",
-    "@tetherto/wdk-wallet-evm-erc-4337": ">=1.0.0-beta.5"
-  },
-  "peerDependenciesMeta": {
-    "@tetherto/wdk-wallet-evm-erc-4337": {
-      "optional": true
-    }
+    "@tetherto/wdk-wallet-solana": ">=1.0.0-beta.5"
   },
   "devDependencies": {
-    "@tetherto/wdk-wallet": "1.0.0-beta.8",
-    "@tetherto/wdk-wallet-evm": "1.0.0-beta.12",
-    "@tetherto/wdk-wallet-evm-erc-4337": "1.0.0-beta.6",
+    "@tetherto/wdk-wallet": "1.0.0-beta.7",
+    "@tetherto/wdk-wallet-solana": "1.0.0-beta.8",
     "cross-env": "10.0.0",
     "jest": "30.0.5",
     "standard": "17.1.2",
