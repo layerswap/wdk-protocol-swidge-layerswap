@@ -13,9 +13,10 @@ Each package lets WDK wallet accounts of a specific source-VM family drive a Lay
 | Package | Source VM | Status |
 | --- | --- | --- |
 | [`@layerswap/wdk-protocol-bridge-layerswap-evm`](./packages/layerswap-evm) | EVM | ✅ |
-| `@layerswap/wdk-protocol-bridge-layerswap-solana` | Solana | planned |
-| `@layerswap/wdk-protocol-bridge-layerswap-tron` | Tron | planned |
-| `@layerswap/wdk-protocol-bridge-layerswap-ton` | TON | planned |
+| [`@layerswap/wdk-protocol-bridge-layerswap-solana`](./packages/layerswap-solana) | Solana | ✅ |
+| [`@layerswap/wdk-protocol-bridge-layerswap-bitcoin`](./packages/layerswap-bitcoin) | Bitcoin (UTXO) | soon |
+| [`@layerswap/wdk-protocol-bridge-layerswap-tron`](./packages/layerswap-tron) | Tron | soon |
+| [`@layerswap/wdk-protocol-bridge-layerswap-ton`](./packages/layerswap-ton) | TON | soon |
 
 ## Apps
 
@@ -39,4 +40,3 @@ pnpm run build:types
 ## License
 
 [Apache-2.0](./LICENSE)
-# wdk-protocol-bridge-layerswap
