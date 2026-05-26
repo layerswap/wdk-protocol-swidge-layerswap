@@ -127,6 +127,32 @@ export default class LayerswapProtocolEvm extends BridgeProtocol {
      */
     getApiClient(): LayerswapApiClient;
     /**
+     * Asks Layerswap for its on-chain assessment of a deposit transaction. Useful as a
+     * follow-up after `bridge()` returns — even if `sendRawTransaction` resolved, the tx
+     * can still revert or be dropped from the mempool. Returns `'completed' | 'failed' |
+     * 'pending'`.
+     *
+     * The source network defaults to the wallet's connected provider (resolved via
+     * `provider.getNetwork().chainId`); pass `options.sourceChain` to override.
+     *
+     * @param {string} txHash - The on-chain transaction hash returned by `bridge()`.
+     * @param {{ sourceChain?: string }} [options]
+     * @returns {Promise<import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapTransactionStatus>}
+     */
+    getTransactionStatus(txHash: string, options?: {
+        sourceChain?: string;
+    }): Promise<import("@layerswap/wdk-protocol-bridge-layerswap-core").LayerswapTransactionStatus>;
+    /**
+     * @private
+     * @returns {Promise<LayerswapNetwork>}
+     */
+    private _detectSourceNetwork;
+    /**
+     * @private
+     * @returns {Promise<string>}
+     */
+    private _detectSourceNetworkName;
+    /**
      * @private
      * @param {BridgeOptions} options
      * @returns {Promise<{ depositTx: { to: string, value: bigint, data: string }, bridgeFee: bigint, swapId: string }>}

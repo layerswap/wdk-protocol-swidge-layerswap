@@ -21,6 +21,8 @@
 /** @typedef {import('./src/layerswap-api-client.js').LayerswapSwapResponse} LayerswapSwapResponse */
 /** @typedef {import('./src/layerswap-api-client.js').LayerswapCreateSwapParams} LayerswapCreateSwapParams */
 /** @typedef {import('./src/layerswap-api-client.js').LayerswapGetQuoteParams} LayerswapGetQuoteParams */
+/** @typedef {import('./src/layerswap-api-client.js').LayerswapTransactionStatus} LayerswapTransactionStatus */
+/** @typedef {import('./src/layerswap-api-client.js').LayerswapTransactionStatusValue} LayerswapTransactionStatusValue */
 
 export { default } from './src/layerswap-api-client.js'
 

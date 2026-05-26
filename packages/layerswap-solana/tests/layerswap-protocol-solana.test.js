@@ -541,4 +541,38 @@ describe('LayerswapProtocolSolana', () => {
       expect(() => p._decodeDepositTransaction('not-base64-actual-garbage===')).toThrow(/Failed to deserialise|legacy Solana Transaction/)
     })
   })
+
+  describe('getTransactionStatus', () => {
+    test('resolves network via genesis hash and forwards to the API client', async () => {
+      global.fetch = buildFetchRouter([{
+        method: 'GET',
+        match: /^\/api\/v2\/transaction_status\?network=SOLANA_MAINNET&transaction_id=sig-aa$/,
+        status: 200,
+        body: () => ({ data: { status: 'completed' } })
+      }])
+
+      const { account } = makeAccount()
+      const p = new LayerswapProtocolSolana(account)
+      stubConnection(p, { genesisHash: SOLANA_MAINNET_GENESIS_HASH })
+
+      await expect(p.getTransactionStatus('sig-aa')).resolves.toEqual({ status: 'completed' })
+    })
+
+    test('honours sourceChain override and skips genesis detection', async () => {
+      global.fetch = buildFetchRouter([{
+        method: 'GET',
+        match: /^\/api\/v2\/transaction_status\?network=SOLANA_DEVNET&transaction_id=sig-bb$/,
+        status: 200,
+        body: () => ({ data: { status: 'pending' } })
+      }])
+
+      const { account } = makeAccount()
+      const p = new LayerswapProtocolSolana(account)
+      const conn = stubConnection(p)
+
+      await expect(p.getTransactionStatus('sig-bb', { sourceChain: 'SOLANA_DEVNET' }))
+        .resolves.toEqual({ status: 'pending' })
+      expect(conn.getGenesisHash).not.toHaveBeenCalled()
+    })
+  })
 })

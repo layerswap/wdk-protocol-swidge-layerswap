@@ -3,7 +3,7 @@
 // CLI for exercising the Layerswap WDK bridge protocols end-to-end.
 //
 // Usage:
-//   cli.mjs [--vm <evm|solana>] <command> [args]
+//   cli.mjs [--vm <evm|solana|tron|ton|bitcoin>] <command> [args]
 //
 // Subcommands:
 //   networks                Lists Layerswap networks the configured endpoint supports.
@@ -19,6 +19,19 @@
 //                must all be hardened (e.g. "0'/0'/0'"); the default unhardened EVM
 //                path is rejected by the Solana wallet and is auto-replaced with
 //                "0'/0'/0'".
+//   --vm tron    Uses @layerswap/wdk-protocol-bridge-layerswap-tron with
+//                @tetherto/wdk-wallet-tron. The wallet prepends `m/44'/195'`
+//                internally, so LAYERSWAP_DERIVATION_PATH is the post-prefix
+//                segment (default "0'/0/0").
+//   --vm ton     Uses @layerswap/wdk-protocol-bridge-layerswap-ton with
+//                @tetherto/wdk-wallet-ton. The wallet prepends `m/44'/607'`
+//                internally; LAYERSWAP_SOURCE_RPC should be a TON Center URL.
+//   --vm bitcoin Uses @layerswap/wdk-protocol-bridge-layerswap-bitcoin with
+//                @tetherto/wdk-wallet-btc. LAYERSWAP_SOURCE_RPC should be a Blockbook
+//                URL. The wallet's network is derived from LAYERSWAP_SOURCE_CHAIN
+//                (BITCOIN_MAINNET → mainnet, BITCOIN_TESTNET → testnet,
+//                BITCOIN_REGTEST → regtest). Override LAYERSWAP_BTC_BIP (44 or 84)
+//                if you need a legacy `1…` address instead of native segwit `bc1q…`.
 //
 // Configuration: copy .env.example → .env, fill values, then
 //   `node --env-file=.env src/cli.mjs [--vm <vm>] <cmd>`
@@ -32,7 +45,7 @@ const TERMINAL = new Set(['completed', 'failed', 'expired', 'cancelled', 'refund
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 function printHelp () {
-  console.log('Usage: cli.mjs [--vm <evm|solana>] <command> [args]')
+  console.log('Usage: cli.mjs [--vm <evm|solana|tron|ton|bitcoin>] <command> [args]')
   console.log('Commands:')
   console.log('  networks                List Layerswap networks at the configured endpoint.')
   console.log('  quote                   Get a quote for the env-configured route.')
@@ -56,8 +69,8 @@ function parseArgs (argv) {
       out.rest.push(arg)
     }
   }
-  if (!['evm', 'solana'].includes(out.vm)) {
-    console.error(`Unknown --vm '${out.vm}'. Expected 'evm' or 'solana'.`)
+  if (!['evm', 'solana', 'tron', 'ton', 'bitcoin'].includes(out.vm)) {
+    console.error(`Unknown --vm '${out.vm}'. Expected 'evm', 'solana', 'tron', 'ton', or 'bitcoin'.`)
     process.exit(1)
   }
   return out
@@ -77,6 +90,27 @@ async function loadVm (vm) {
       import('./account-solana.mjs')
     ])
     return { Protocol: LayerswapSolana, buildAccount: accountMod.buildAccount }
+  }
+  if (vm === 'tron') {
+    const [{ default: LayerswapTron }, accountMod] = await Promise.all([
+      import('@layerswap/wdk-protocol-bridge-layerswap-tron'),
+      import('./account-tron.mjs')
+    ])
+    return { Protocol: LayerswapTron, buildAccount: accountMod.buildAccount }
+  }
+  if (vm === 'ton') {
+    const [{ default: LayerswapTon }, accountMod] = await Promise.all([
+      import('@layerswap/wdk-protocol-bridge-layerswap-ton'),
+      import('./account-ton.mjs')
+    ])
+    return { Protocol: LayerswapTon, buildAccount: accountMod.buildAccount }
+  }
+  if (vm === 'bitcoin') {
+    const [{ default: LayerswapBitcoin }, accountMod] = await Promise.all([
+      import('@layerswap/wdk-protocol-bridge-layerswap-bitcoin'),
+      import('./account-bitcoin.mjs')
+    ])
+    return { Protocol: LayerswapBitcoin, buildAccount: accountMod.buildAccount }
   }
   throw new Error(`Unsupported VM '${vm}'.`)
 }
@@ -172,33 +206,68 @@ async function cmdBridge (vm) {
     process.exit(1)
   }
 
-  console.log(`\n>> polling /swaps/${swapId} every ${cfg.pollIntervalMs}ms (timeout ${cfg.pollTimeoutMs}ms)`)
+  console.log(`\n>> polling /swaps/${swapId} + source-chain tx status every ${cfg.pollIntervalMs}ms (timeout ${cfg.pollTimeoutMs}ms)`)
   const client = protocol.getApiClient()
   const startedAt = Date.now()
-  let lastStatus = null
+  let lastSwapStatus = null
+  let lastInputTxStatus = null
 
   while (Date.now() - startedAt < cfg.pollTimeoutMs) {
     let response
     try {
       response = await client.getSwap(swapId)
     } catch (err) {
-      console.warn('   poll error:', err.message)
+      console.warn('   swap poll error:', err.message)
       await sleep(cfg.pollIntervalMs)
       continue
     }
 
     const swap = response && response.swap
-    const status = swap && swap.status
-    if (status !== lastStatus) {
-      console.log(`   [${new Date().toISOString()}] status=${status}`)
-      lastStatus = status
+    const swapStatus = swap && swap.status
+
+    // Check the source-chain tx status independently. Layerswap surfaces 'failed' here
+    // (e.g. Tron energy/bandwidth shortfall, smart-contract revert, dropped mempool)
+    // before the swap as a whole transitions to a terminal state.
+    let inputTxStatus = lastInputTxStatus
+    try {
+      const txStatus = await protocol.getTransactionStatus(result.hash, {
+        sourceChain: cfg.sourceChainOverride
+      })
+      inputTxStatus = txStatus?.status ?? inputTxStatus
+    } catch (err) {
+      // NOT_FOUND while Layerswap is still indexing — keep waiting.
+      if (!/NOT_FOUND/.test(err.message)) {
+        console.warn('   txstatus poll error:', err.message)
+      }
     }
 
-    if (status && TERMINAL.has(status)) {
+    if (swapStatus !== lastSwapStatus || inputTxStatus !== lastInputTxStatus) {
+      console.log(`   [${new Date().toISOString()}] swap=${swapStatus} inputTx=${inputTxStatus ?? '(not indexed yet)'}`)
+      lastSwapStatus = swapStatus
+      lastInputTxStatus = inputTxStatus
+    }
+
+    // Short-circuit: if Layerswap reports the source-chain tx as failed, the swap
+    // cannot complete. Print and exit with an error so the operator can investigate
+    // (typical Tron failure modes: insufficient energy / bandwidth, contract revert,
+    // dropped tx).
+    if (inputTxStatus === 'failed') {
+      console.error('\nSource-chain transaction failed on-chain.')
+      console.error(`  vm                : ${vm}`)
+      console.error(`  source address    : ${address}`)
+      console.error(`  source tx hash    : ${result.hash}`)
+      console.error(`  swap id           : ${swapId}`)
+      console.error(`  swap status       : ${swapStatus}`)
+      if (swap?.fail_reason) console.error(`  swap fail reason  : ${swap.fail_reason}`)
+      process.exit(3)
+    }
+
+    if (swapStatus && TERMINAL.has(swapStatus)) {
       const outputTx = (swap.transactions ?? []).find((t) => t.type === 'output')
       console.log('\nFinal state:')
-      console.log(`  status            : ${status}`)
-      if (status === 'completed' && outputTx) {
+      console.log(`  status            : ${swapStatus}`)
+      console.log(`  input tx status   : ${inputTxStatus ?? '(unknown)'}`)
+      if (swapStatus === 'completed' && outputTx) {
         console.log(`  destination tx    : ${outputTx.transaction_hash}`)
         console.log(`  destination amount: ${outputTx.amount}`)
       } else if (swap.fail_reason) {
@@ -210,7 +279,7 @@ async function cmdBridge (vm) {
     await sleep(cfg.pollIntervalMs)
   }
 
-  console.error(`\nTimed out. Last seen status: ${lastStatus}. Swap id: ${swapId}`)
+  console.error(`\nTimed out. Last seen swap=${lastSwapStatus}, inputTx=${lastInputTxStatus}. Swap id: ${swapId}`)
   process.exit(2)
 }
 

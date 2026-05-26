@@ -2,11 +2,13 @@
 
 Monorepo of [WDK](https://docs.wdk.tether.io/) bridge modules for the [Layerswap](https://layerswap.io/) protocol.
 
-Each package lets WDK wallet accounts of a specific source-VM family drive a Layerswap swap via the Layerswap public HTTP API:
+Each package lets WDK wallet accounts of a specific source-VM family drive a Layerswap swap via the Layerswap public HTTP API (v2):
 
-1. `POST /api/v2/swaps` creates a swap and returns a deposit address + deposit calldata.
-2. The user's wallet signs and broadcasts the deposit on the source chain.
-3. Layerswap performs the destination-chain payout off-chain.
+1. `POST /api/v2/swaps` creates a swap; the response includes `deposit_actions[]` with the source-chain deposit `to_address` and, where the source VM needs it, encoded `call_data`.
+2. The wallet signs and broadcasts that deposit on the source chain.
+3. Layerswap detects the source deposit and broadcasts the destination-chain payout transaction to `destination_address`.
+
+`GET /api/v2/networks` exposes the chain/token catalog, `GET /api/v2/quote` previews fees and receive amount, and `GET /api/v2/transaction_status` / `GET /api/v2/swaps/{id}` are used to poll progress.
 
 ## Packages
 
@@ -14,9 +16,9 @@ Each package lets WDK wallet accounts of a specific source-VM family drive a Lay
 | --- | --- | --- |
 | [`@layerswap/wdk-protocol-bridge-layerswap-evm`](./packages/layerswap-evm) | EVM | ✅ |
 | [`@layerswap/wdk-protocol-bridge-layerswap-solana`](./packages/layerswap-solana) | Solana | ✅ |
-| [`@layerswap/wdk-protocol-bridge-layerswap-bitcoin`](./packages/layerswap-bitcoin) | Bitcoin (UTXO) | soon |
+| [`@layerswap/wdk-protocol-bridge-layerswap-bitcoin`](./packages/layerswap-bitcoin) | Bitcoin (UTXO) | ✅ |
+| [`@layerswap/wdk-protocol-bridge-layerswap-ton`](./packages/layerswap-ton) | TON | ✅ |
 | [`@layerswap/wdk-protocol-bridge-layerswap-tron`](./packages/layerswap-tron) | Tron | soon |
-| [`@layerswap/wdk-protocol-bridge-layerswap-ton`](./packages/layerswap-ton) | TON | soon |
 
 ## Apps
 

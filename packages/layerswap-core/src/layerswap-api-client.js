@@ -110,6 +110,20 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
  */
 
 /**
+ * @typedef {'completed' | 'failed' | 'pending'} LayerswapTransactionStatusValue
+ *
+ * Layerswap's on-chain assessment of a deposit transaction. Lowercase values match the
+ * web app's enum exactly (`completed` once the source-chain tx is confirmed and
+ * Layerswap has indexed it, `failed` if the chain rejected it, `pending` while in the
+ * mempool or awaiting confirmations).
+ */
+
+/**
+ * @typedef {Object} LayerswapTransactionStatus
+ * @property {LayerswapTransactionStatusValue} status
+ */
+
+/**
  * @typedef {Object} LayerswapApiClientConfig
  * @property {string} [apiKey]
  * @property {string} [apiUrl]
@@ -125,6 +139,7 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
  * - `POST /api/v2/swaps`
  * - `GET  /api/v2/swaps/{id}`
  * - `POST /api/v2/swaps/{id}/deposit_speedup`
+ * - `GET  /api/v2/transaction_status`
  */
 export default class LayerswapApiClient {
   /**
@@ -212,6 +227,30 @@ export default class LayerswapApiClient {
    */
   async getSwap (swapId) {
     return this._request('GET', `/api/v2/swaps/${encodeURIComponent(swapId)}`)
+  }
+
+  /**
+   * Returns Layerswap's on-chain assessment of a deposit transaction (completed / failed /
+   * pending). Useful as a follow-up to `bridge()` when the source-chain broadcast succeeded
+   * but the tx might still revert or be dropped from the mempool — Layerswap will surface
+   * `'failed'` here even before the swap as a whole reaches a terminal status.
+   *
+   * Throws if Layerswap cannot find the transaction (e.g. before it's been indexed, or
+   * if the network/transaction_id pair is wrong). The protocol-level wrapper calls this
+   * once per poll; callers should treat `NOT_FOUND` as "not yet indexed, retry later".
+   *
+   * @param {string} networkName  Layerswap network name (e.g. `'ETHEREUM_MAINNET'`,
+   *                              `'TRON_MAINNET'`, `'BITCOIN_MAINNET'`).
+   * @param {string} transactionId The on-chain transaction hash / id, in the source chain's
+   *                              native format.
+   * @returns {Promise<LayerswapTransactionStatus>}
+   */
+  async getTransactionStatus (networkName, transactionId) {
+    const query = this._buildQueryString({
+      network: networkName,
+      transaction_id: transactionId
+    })
+    return this._request('GET', `/api/v2/transaction_status${query}`)
   }
 
   /**

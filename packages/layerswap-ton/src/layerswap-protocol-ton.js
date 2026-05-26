@@ -15,7 +15,13 @@
 'use strict'
 
 import { BridgeProtocol } from '@tetherto/wdk-wallet/protocols'
-import { Connection, Keypair, Transaction } from '@solana/web3.js'
+// Import TON primitives from `@ton/ton` (which re-exports `@ton/core`) — *not* from
+// `@ton/core` directly. `@tetherto/wdk-wallet-ton` brings its own copy of `@ton/core`
+// transitively via `@ton/ton`; depending on `@ton/core` directly causes pnpm to resolve
+// two copies, which makes the wallet reject our Cell objects with "Invalid argument"
+// when the internal `storeRef(body)` does an `instanceof Cell` check against the wrong
+// class.
+import { Address, beginCell, toNano } from '@ton/ton'
 
 import LayerswapApiClient, {
   resolveNetworkByName,
@@ -27,27 +33,14 @@ import LayerswapApiClient, {
 /** @typedef {import('@tetherto/wdk-wallet/protocols').BridgeProtocolConfig} BridgeProtocolConfig */
 /** @typedef {import('@tetherto/wdk-wallet/protocols').BridgeResult} BridgeResult */
 
-/** @typedef {import('@tetherto/wdk-wallet-solana').WalletAccountSolana} WalletAccountSolana */
-/** @typedef {import('@tetherto/wdk-wallet-solana').WalletAccountReadOnlySolana} WalletAccountReadOnlySolana */
+/** @typedef {import('@tetherto/wdk-wallet-ton').WalletAccountTon} WalletAccountTon */
+/** @typedef {import('@tetherto/wdk-wallet-ton').WalletAccountReadOnlyTon} WalletAccountReadOnlyTon */
+
+/** @typedef {import('@ton/core').Cell} Cell */
 
 /** @typedef {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapNetwork} LayerswapNetwork */
 /** @typedef {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapToken} LayerswapToken */
 /** @typedef {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapDepositAction} LayerswapDepositAction */
-
-/**
- * Known Solana cluster genesis hashes → Layerswap network names.
- *
- * Layerswap's `network.chain_id` is unreliable for Solana (empty string on mainnet,
- * a numeric string on devnet), so we identify the source network by genesis hash
- * instead. See `tests/fixtures/RESEARCH-NOTES.md`.
- */
-/* eslint-disable quote-props */
-const GENESIS_HASH_TO_NETWORK_NAME = Object.freeze({
-  '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d': 'SOLANA_MAINNET',
-  'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG': 'SOLANA_DEVNET',
-  '4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY': 'SOLANA_TESTNET'
-})
-/* eslint-enable quote-props */
 
 /**
  * @typedef {Object} LayerswapProtocolConfig
@@ -64,15 +57,15 @@ const GENESIS_HASH_TO_NETWORK_NAME = Object.freeze({
  * @typedef {Object} BridgeOptions
  * @property {string} targetChain             - Layerswap destination network name (e.g. `'ARBITRUM_MAINNET'`).
  * @property {string} recipient               - Destination-chain recipient address, in its native format.
- * @property {string} token                   - Source token: SPL mint base58 address OR Layerswap symbol
- *                                              (e.g. `'SOL'`, `'USDC'`).
- * @property {number | bigint} amount         - Source amount in base units (lamports for SOL, smallest unit
- *                                              for SPL tokens).
+ * @property {string} token                   - Source token: jetton master address OR Layerswap symbol
+ *                                              (e.g. `'TON'`, `'USDT'`).
+ * @property {number | bigint} amount         - Source amount in base units (nanotons for TON, smallest
+ *                                              unit for jetton tokens).
  * @property {string} [destinationToken]      - Destination token (address or symbol). Defaults to the
  *                                              source token's symbol.
- * @property {string} [sourceChain]           - Override auto-detected source network name. Auto-detection
- *                                              uses `Connection.getGenesisHash()` against a table of
- *                                              known Solana cluster hashes.
+ * @property {string} [sourceChain]           - Override the default source network name. Defaults to
+ *                                              `'TON_MAINNET'` (Layerswap only lists mainnet at the time
+ *                                              of writing, and TON has no stable network id we can read).
  * @property {boolean} [refuel]               - Request a native-gas drop on the destination chain.
  * @property {string} [slippage]              - Slippage tolerance percentage, e.g. `'0.5'`.
  * @property {string} [referenceId]           - External reference id for the created swap.
@@ -83,41 +76,56 @@ const GENESIS_HASH_TO_NETWORK_NAME = Object.freeze({
  * @typedef {BridgeResult & { swapId: string }} LayerswapBridgeResult
  */
 
-// Standard per-signature fee floor for Solana. Used as a quote-time approximation only;
-// the real fee is read from the deserialised deposit transaction at bridge() time.
-const SOLANA_PER_SIGNATURE_FEE_LAMPORTS = 5000n
+const DEFAULT_SOURCE_NETWORK_NAME = 'TON_MAINNET'
+
+// Gas / forward-amount constants for the jetton transfer message. Mirrors the
+// Layerswap web app's `TonWalletWithdraw` exactly.
+const TON_JETTON_MESSAGE_VALUE = toNano('0.045') // 45_000_000n — total message value (gas)
+const TON_JETTON_FORWARD_VALUE = toNano('0.00002') // 20_000n     — value forwarded to recipient wallet
+
+// Quote-time fee approximations (in nanotons). Bridge-time fees come from the
+// wallet's `sendTransaction` return value.
+const TON_NATIVE_FEE_APPROX_NANOTONS = 10_000_000n // 0.01 TON
+const TON_JETTON_FEE_APPROX_NANOTONS = 50_000_000n // 0.05 TON (includes 0.045 message value)
+
+// Jetton transfer opcode (CRC32 of 'transfer'). TIP-3 standard.
+const JETTON_TRANSFER_OP = 0x0f8a7ea5
 
 /**
- * Bridge protocol that drives a Layerswap swap from a Solana wallet account.
+ * Bridge protocol that drives a Layerswap swap from a TON wallet account.
  *
  * Unlike on-chain bridges this protocol is HTTP-orchestrated:
- *   1. POST /api/v2/swaps to create a swap and receive a deposit transaction blob.
- *   2. Deserialise the `call_data` (base64-encoded legacy Solana `Transaction`) and broadcast
- *      it from the user's wallet.
- *   3. Layerswap performs the destination-chain payout off-chain.
+ *   1. POST /api/v2/swaps to create a swap and receive the deposit address + a JSON `call_data`
+ *      containing the Layerswap reference comment (and, for jettons, the amount).
+ *   2. Build the deposit message body client-side via `@ton/core`:
+ *      - Native TON: a comment cell with op `0` and the Layerswap comment as `storeStringTail`.
+ *      - Jetton: a TIP-3 jetton-transfer body (op `0x0f8a7ea5`) with the comment in the
+ *        forward payload, sent to the sender's jetton wallet with a ~0.045 TON gas budget.
+ *   3. Hand `{ to, value, body }` to `account.sendTransaction(...)`, which sets up the v5r1
+ *      wallet contract, signs with the secret key, and broadcasts via `_contract.send`.
+ *   4. Layerswap performs the destination-chain payout off-chain.
  *
  * Semantic note: `BridgeResult.bridgeFee` is documented in `@tetherto/wdk-wallet` as
  * "native tokens paid to the bridge protocol". Layerswap deducts its fee from the
  * source-token amount instead, so we return `bridgeFee` in **source-token base units**.
- * Do not naively add `fee` (native lamports) and `bridgeFee` together — they are in
+ * Do not naively add `fee` (native nanotons) and `bridgeFee` together — they are in
  * different units. The `bridgeMaxFee` config compares against `bridgeFee` only.
  *
- * Implementation note: the deposit transaction is broadcast through `@solana/web3.js`
- * (legacy SDK) rather than `account.sendTransaction(...)`. Layerswap's `call_data` is a
- * base64-encoded legacy `Transaction` wire format, and the modular v3 SDK that powers
- * `@tetherto/wdk-wallet-solana` does not natively consume that shape. The wallet account
- * is still the source of identity (`getAddress`, `keyPair`).
+ * Implementation note: this package depends on `@ton/core` (for cell building / `Address`
+ * parsing) in addition to the wallet's `@ton/ton` peer. The wallet handles wallet-contract
+ * setup, signing, and broadcasting; this package only owns the deposit message body and
+ * the Layerswap HTTP plumbing.
  */
-export default class LayerswapProtocolSolana extends BridgeProtocol {
+export default class LayerswapProtocolTon extends BridgeProtocol {
   /**
    * @overload
-   * @param {WalletAccountReadOnlySolana} account - The wallet account to use to interact with the protocol.
+   * @param {WalletAccountReadOnlyTon} account - The wallet account to use to interact with the protocol.
    * @param {LayerswapProtocolConfig} [config] - The layerswap protocol configuration.
    */
 
   /**
    * @overload
-   * @param {WalletAccountSolana} account - The wallet account to use to interact with the protocol.
+   * @param {WalletAccountTon} account - The wallet account to use to interact with the protocol.
    * @param {LayerswapProtocolConfig} [config] - The layerswap protocol configuration.
    */
   constructor (account, config = {}) {
@@ -132,23 +140,6 @@ export default class LayerswapProtocolSolana extends BridgeProtocol {
       apiUrl: config.apiUrl,
       requestTimeoutMs: config.requestTimeoutMs
     })
-
-    const providerOption = account?._config?.provider ?? account?._config?.rpcUrl
-    const endpoint = Array.isArray(providerOption) ? providerOption[0] : providerOption
-
-    /**
-     * @private
-     * @type {Connection | undefined}
-     */
-    this._connection = typeof endpoint === 'string' && endpoint.length > 0
-      ? new Connection(endpoint, 'confirmed')
-      : undefined
-
-    /**
-     * @private
-     * @type {string | undefined}
-     */
-    this._sourceNetworkName = undefined
   }
 
   /**
@@ -158,7 +149,7 @@ export default class LayerswapProtocolSolana extends BridgeProtocol {
    * the destination-chain payout asynchronously; callers can use `getApiClient().getSwap(swapId)`
    * to track destination delivery.
    *
-   * Semantic note: `bridgeFee` is in **source-token base units**, not native lamports.
+   * Semantic note: `bridgeFee` is in **source-token base units**, not native nanotons.
    * See class JSDoc for the rationale.
    *
    * @param {BridgeOptions} options - The bridge's options.
@@ -170,39 +161,37 @@ export default class LayerswapProtocolSolana extends BridgeProtocol {
       throw new Error("The 'bridge(options)' method requires the protocol to be initialized with a non read-only account.")
     }
 
-    if (!this._connection) {
-      throw new Error('The wallet must be connected to a provider in order to perform bridge operations.')
-    }
-
-    const { transaction, bridgeFee, swapId } = await this._buildDepositTransaction(options)
+    const { action, sourceToken, parsedCallData, bridgeFee, swapId } =
+      await this._createDepositSwap(options)
 
     const bridgeMaxFee = config?.bridgeMaxFee ?? this._config.bridgeMaxFee
     if (bridgeMaxFee !== undefined && bridgeFee >= BigInt(bridgeMaxFee)) {
       throw new Error('Exceeded maximum fee cost for bridge operation.')
     }
 
-    const fee = await this._estimateSignedTransactionFee(transaction)
+    const message = await this._buildDepositMessage({
+      sourceToken,
+      action,
+      parsedCallData,
+      amount: BigInt(options.amount)
+    })
 
-    const keypair = this._buildKeypair()
-    transaction.sign(keypair)
-
-    const hash = await this._connection.sendRawTransaction(transaction.serialize())
+    const { hash, fee } = await this._account.sendTransaction(message)
 
     await this._notifyDepositBroadcast(swapId, hash)
 
-    return { hash, fee, bridgeFee, swapId }
+    return { hash, fee: BigInt(fee), bridgeFee, swapId }
   }
 
   /**
    * Quotes the costs of a Layerswap bridge operation without creating a swap.
    *
-   * The reported `fee` is an approximation of the source-chain fee — Solana fees are
-   * per-signature and bounded; a single-signature transfer is essentially always
-   * `SOLANA_PER_SIGNATURE_FEE_LAMPORTS` (5000 lamports). The actual deposit transaction
-   * may contain additional instructions (e.g. memo, ATA creation) and the `fee` reported
-   * by `bridge()` reflects that — quote-time it is only an approximation.
+   * The reported `fee` is an approximation:
+   *   - Native TON: `TON_NATIVE_FEE_APPROX_NANOTONS` (~0.01 TON).
+   *   - Jetton: `TON_JETTON_FEE_APPROX_NANOTONS` (~0.05 TON, includes the 0.045 message value
+   *     budgeted for jetton-wallet gas + forward amount).
    *
-   * Semantic note: `bridgeFee` is in **source-token base units**, not native lamports.
+   * Semantic note: `bridgeFee` is in **source-token base units**, not native nanotons.
    * See class JSDoc for the rationale.
    *
    * @param {BridgeOptions} options - The bridge's options.
@@ -230,7 +219,9 @@ export default class LayerswapProtocolSolana extends BridgeProtocol {
     })
 
     const bridgeFee = parseDecimal(quote.total_fee, sourceToken.decimals)
-    const fee = SOLANA_PER_SIGNATURE_FEE_LAMPORTS
+    const fee = sourceToken.contract
+      ? TON_JETTON_FEE_APPROX_NANOTONS
+      : TON_NATIVE_FEE_APPROX_NANOTONS
 
     return { fee, bridgeFee }
   }
@@ -246,27 +237,37 @@ export default class LayerswapProtocolSolana extends BridgeProtocol {
 
   /**
    * Asks Layerswap for its on-chain assessment of a deposit transaction. Useful as a
-   * follow-up after `bridge()` returns — even if `sendRawTransaction` resolved, the tx
-   * can still revert or be dropped. Returns `'completed' | 'failed' | 'pending'`.
+   * follow-up after `bridge()` returns — even if the wallet's `sendTransaction` resolved,
+   * the message can still be discarded by the validator or fail at the jetton wallet.
+   * Returns `'completed' | 'failed' | 'pending'`.
    *
-   * The source network defaults to the Solana cluster detected via `getGenesisHash()`;
-   * pass `options.sourceChain` to override.
+   * The source network defaults to `TON_MAINNET` (TON has no stable network id and
+   * Layerswap currently lists only mainnet); pass `options.sourceChain` to override.
    *
-   * @param {string} signature - The Solana signature returned by `bridge()`.
+   * @param {string} hash - The TON external-message hash returned by `bridge()`.
    * @param {{ sourceChain?: string }} [options]
    * @returns {Promise<import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapTransactionStatus>}
    */
-  async getTransactionStatus (signature, options = {}) {
-    const networkName = options.sourceChain ?? await this._detectSourceNetworkName()
-    return this._client.getTransactionStatus(networkName, signature)
+  async getTransactionStatus (hash, options = {}) {
+    const networkName = options.sourceChain ?? DEFAULT_SOURCE_NETWORK_NAME
+    return this._client.getTransactionStatus(networkName, hash)
   }
 
   /**
+   * Calls `POST /api/v2/swaps` for the resolved route and extracts the wallet-driven
+   * deposit action + the parsed `call_data` JSON.
+   *
    * @private
    * @param {BridgeOptions} options
-   * @returns {Promise<{ transaction: Transaction, bridgeFee: bigint, swapId: string }>}
+   * @returns {Promise<{
+   *   action: LayerswapDepositAction,
+   *   sourceToken: LayerswapToken,
+   *   parsedCallData: { comment?: string, amount?: string | number } | null,
+   *   bridgeFee: bigint,
+   *   swapId: string
+   * }>}
    */
-  async _buildDepositTransaction (options) {
+  async _createDepositSwap (options) {
     const { sourceNetwork, sourceToken, destinationNetwork, destinationToken } =
       await this._resolveRoute(options)
 
@@ -299,18 +300,18 @@ export default class LayerswapProtocolSolana extends BridgeProtocol {
       throw new Error('Layerswap response is missing swap details.')
     }
 
-    if (typeof action.call_data !== 'string' || action.call_data.length === 0) {
-      throw new Error('Layerswap deposit action for Solana is missing call_data; the wire-format transaction cannot be reconstructed.')
+    if (typeof action.to_address !== 'string' || action.to_address.length === 0) {
+      throw new Error('Layerswap deposit action for TON is missing to_address; the deposit message cannot be built.')
     }
 
-    const transaction = this._decodeDepositTransaction(action.call_data)
+    const parsedCallData = this._parseCallData(action.call_data)
 
     const totalFeeDecimal = response.quote?.quote?.total_fee
     const bridgeFee = totalFeeDecimal !== undefined && totalFeeDecimal !== null
       ? parseDecimal(totalFeeDecimal, sourceToken.decimals)
       : 0n
 
-    return { transaction, bridgeFee, swapId: swap.id }
+    return { action, sourceToken, parsedCallData, bridgeFee, swapId: swap.id }
   }
 
   /**
@@ -324,7 +325,7 @@ export default class LayerswapProtocolSolana extends BridgeProtocol {
    * }>}
    */
   async _resolveRoute (options) {
-    const sourceName = options.sourceChain ?? await this._detectSourceNetworkName()
+    const sourceName = options.sourceChain ?? DEFAULT_SOURCE_NETWORK_NAME
     const sourceNetwork = await resolveNetworkByName(this._client, sourceName)
 
     const sourceToken = resolveToken(sourceNetwork, options.token)
@@ -360,119 +361,123 @@ export default class LayerswapProtocolSolana extends BridgeProtocol {
   }
 
   /**
-   * Decodes Layerswap's `call_data` (base64 of a legacy Solana `Transaction` wire format)
-   * into a `Transaction` instance ready for signing + broadcast. Mirrors the Layerswap web
-   * app's `SVMWalletWithdraw` code path.
+   * Parses Layerswap's `call_data` for TON, which the Layerswap web app expects as a JSON
+   * string with optional `comment` and `amount` fields. Tolerates missing / empty / non-JSON
+   * payloads by returning `null` — the deposit message will then carry an empty comment.
    *
    * @private
-   * @param {string} callData
-   * @returns {Transaction}
+   * @param {string | null | undefined} callData
+   * @returns {{ comment?: string, amount?: string | number } | null}
    */
-  _decodeDepositTransaction (callData) {
-    let bytes
+  _parseCallData (callData) {
+    if (callData === null || callData === undefined || callData === '') {
+      return null
+    }
     try {
-      bytes = Buffer.from(callData, 'base64')
-    } catch (err) {
-      throw new Error(`Layerswap call_data is not valid base64: ${err.message}`)
-    }
-
-    try {
-      return Transaction.from(bytes)
-    } catch (err) {
-      const preview = callData.length > 64 ? `${callData.slice(0, 64)}…` : callData
-      throw new Error(`Failed to deserialise Layerswap call_data as a legacy Solana Transaction (length=${callData.length}, preview='${preview}'): ${err.message}`)
-    }
-  }
-
-  /**
-   * Builds a `Keypair` from the wallet account's raw 32-byte private + public key bytes.
-   * `@solana/web3.js` expects a 64-byte secret key (32 private || 32 public, nacl convention).
-   *
-   * @private
-   * @returns {Keypair}
-   */
-  _buildKeypair () {
-    const { privateKey, publicKey } = this._account.keyPair
-    if (!(privateKey instanceof Uint8Array) || privateKey.length !== 32 ||
-        !(publicKey instanceof Uint8Array) || publicKey.length !== 32) {
-      throw new Error('Wallet account exposed an unexpected key pair shape; expected 32-byte private + 32-byte public Uint8Arrays.')
-    }
-
-    const secret = new Uint8Array(64)
-    secret.set(privateKey, 0)
-    secret.set(publicKey, 32)
-    return Keypair.fromSecretKey(secret)
-  }
-
-  /**
-   * Estimates the on-chain fee for a deserialised Layerswap deposit transaction by asking
-   * the connected RPC. Mirrors the Layerswap web app's `transaction.getEstimatedFee(connection)`
-   * call.
-   *
-   * @private
-   * @param {Transaction} transaction
-   * @returns {Promise<bigint>} The fee in lamports.
-   */
-  async _estimateSignedTransactionFee (transaction) {
-    if (typeof transaction.getEstimatedFee !== 'function') {
-      return SOLANA_PER_SIGNATURE_FEE_LAMPORTS
-    }
-
-    try {
-      const fee = await transaction.getEstimatedFee(this._connection)
-      if (fee === null || fee === undefined) return SOLANA_PER_SIGNATURE_FEE_LAMPORTS
-      return BigInt(fee)
+      const parsed = JSON.parse(callData)
+      if (parsed && typeof parsed === 'object') return parsed
+      return null
     } catch (_) {
-      return SOLANA_PER_SIGNATURE_FEE_LAMPORTS
+      return null
     }
   }
 
   /**
-   * Tests whether the bound account is a writable Solana wallet account
-   * (i.e. exposes a `keyPair` with both a 32-byte `privateKey` and 32-byte
-   * `publicKey`). This is a duck-type check rather than an `instanceof
-   * WalletAccountSolana` check because pnpm-workspace setups can resolve the
-   * wallet package to a different copy than this package's own copy when the
+   * Builds the `{ to, value, body }` argument for `account.sendTransaction(...)`. Branches
+   * on `sourceToken.contract`: jetton master address present → jetton path, otherwise
+   * native TON path.
+   *
+   * @private
+   * @param {Object} params
+   * @param {LayerswapToken} params.sourceToken
+   * @param {LayerswapDepositAction} params.action
+   * @param {{ comment?: string, amount?: string | number } | null} params.parsedCallData
+   * @param {bigint} params.amount
+   * @returns {Promise<{ to: string, value: bigint, body: Cell }>}
+   */
+  async _buildDepositMessage ({ sourceToken, action, parsedCallData, amount }) {
+    const comment = (parsedCallData && typeof parsedCallData.comment === 'string')
+      ? parsedCallData.comment
+      : ''
+
+    if (!sourceToken.contract) {
+      // Native TON deposit — body is just a comment cell, value is the swap amount.
+      const body = beginCell()
+        .storeUint(0, 32)
+        .storeStringTail(comment)
+        .endCell()
+
+      return { to: action.to_address, value: amount, body }
+    }
+
+    // Jetton deposit — body is a TIP-3 jetton-transfer; value is gas budget; target
+    // is the sender's per-jetton wallet, not the deposit address directly.
+    const depositAddress = Address.parse(action.to_address)
+
+    const forwardPayload = beginCell()
+      .storeUint(0, 32)
+      .storeStringTail(comment)
+      .endCell()
+
+    // Prefer Layerswap-supplied amount over the caller's options.amount (matches the
+    // Layerswap web app's behaviour — Layerswap may re-quote the deposit amount slightly).
+    const jettonAmount = this._resolveJettonAmount(parsedCallData, amount)
+
+    const body = beginCell()
+      .storeUint(JETTON_TRANSFER_OP, 32)
+      .storeUint(0, 64) // query id
+      .storeCoins(jettonAmount)
+      .storeAddress(depositAddress) // jetton transfer destination
+      .storeAddress(depositAddress) // response_destination (excess + notification target)
+      .storeBit(0) // no custom payload
+      .storeCoins(TON_JETTON_FORWARD_VALUE)
+      .storeBit(1) // forward payload is a ref
+      .storeRef(forwardPayload)
+      .endCell()
+
+    const jettonWalletAddress = await this._account._getJettonWalletAddress(sourceToken.contract)
+
+    return {
+      to: jettonWalletAddress.toString(),
+      value: TON_JETTON_MESSAGE_VALUE,
+      body
+    }
+  }
+
+  /**
+   * Resolves the jetton amount to encode in the jetton-transfer body. Prefers Layerswap's
+   * `parsedCallData.amount` (matches the UI), falls back to `options.amount`.
+   *
+   * @private
+   * @param {{ amount?: string | number } | null} parsedCallData
+   * @param {bigint} fallbackAmount
+   * @returns {bigint}
+   */
+  _resolveJettonAmount (parsedCallData, fallbackAmount) {
+    if (!parsedCallData || parsedCallData.amount === undefined || parsedCallData.amount === null) {
+      return fallbackAmount
+    }
+    try {
+      return BigInt(parsedCallData.amount)
+    } catch (_) {
+      return fallbackAmount
+    }
+  }
+
+  /**
+   * Tests whether the bound account is a writable TON wallet account
+   * (i.e. exposes `sendTransaction`). This is a duck-type check rather than an
+   * `instanceof WalletAccountTon` check because pnpm-workspace setups can resolve
+   * the wallet package to a different copy than this package's own copy when the
    * dep tree's peer-dep contexts diverge — `instanceof` would then fail on a
-   * structurally-correct account. Read-only accounts do not expose `keyPair`.
+   * structurally-correct account. Read-only accounts do not expose `sendTransaction`.
    *
    * @private
    * @param {unknown} account
    * @returns {boolean}
    */
   _isWritableAccount (account) {
-    if (!account || typeof account !== 'object') return false
-    const keyPair = account.keyPair
-    if (!keyPair || typeof keyPair !== 'object') return false
-    const { privateKey, publicKey } = keyPair
-    return privateKey instanceof Uint8Array && privateKey.length === 32 &&
-      publicKey instanceof Uint8Array && publicKey.length === 32
-  }
-
-  /**
-   * Detects the source Solana network by genesis hash. Cached for the lifetime of the
-   * protocol instance.
-   *
-   * @private
-   * @returns {Promise<string>} The Layerswap network name (e.g. 'SOLANA_MAINNET').
-   */
-  async _detectSourceNetworkName () {
-    if (this._sourceNetworkName !== undefined) {
-      return this._sourceNetworkName
-    }
-
-    if (!this._connection) {
-      throw new Error('The wallet must be connected to a provider in order to detect the source chain.')
-    }
-
-    const genesisHash = await this._connection.getGenesisHash()
-    const name = GENESIS_HASH_TO_NETWORK_NAME[genesisHash]
-    if (!name) {
-      throw new Error(`Unknown Solana genesis hash '${genesisHash}'. Pass the Layerswap network name explicitly via the 'sourceChain' option.`)
-    }
-
-    this._sourceNetworkName = name
-    return name
+    return !!(account && typeof account === 'object' && typeof account.sendTransaction === 'function')
   }
 
   /**

@@ -247,6 +247,42 @@ export default class LayerswapProtocolEvm extends BridgeProtocol {
   }
 
   /**
+   * Asks Layerswap for its on-chain assessment of a deposit transaction. Useful as a
+   * follow-up after `bridge()` returns — even if `sendRawTransaction` resolved, the tx
+   * can still revert or be dropped from the mempool. Returns `'completed' | 'failed' |
+   * 'pending'`.
+   *
+   * The source network defaults to the wallet's connected provider (resolved via
+   * `provider.getNetwork().chainId`); pass `options.sourceChain` to override.
+   *
+   * @param {string} txHash - The on-chain transaction hash returned by `bridge()`.
+   * @param {{ sourceChain?: string }} [options]
+   * @returns {Promise<import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapTransactionStatus>}
+   */
+  async getTransactionStatus (txHash, options = {}) {
+    const networkName = options.sourceChain ?? await this._detectSourceNetworkName()
+    return this._client.getTransactionStatus(networkName, txHash)
+  }
+
+  /**
+   * @private
+   * @returns {Promise<LayerswapNetwork>}
+   */
+  async _detectSourceNetwork () {
+    const chainId = await this._getChainId()
+    return resolveSourceNetwork(this._client, chainId)
+  }
+
+  /**
+   * @private
+   * @returns {Promise<string>}
+   */
+  async _detectSourceNetworkName () {
+    const network = await this._detectSourceNetwork()
+    return network.name
+  }
+
+  /**
    * @private
    * @param {BridgeOptions} options
    * @returns {Promise<{ depositTx: { to: string, value: bigint, data: string }, bridgeFee: bigint, swapId: string }>}
@@ -318,13 +354,9 @@ export default class LayerswapProtocolEvm extends BridgeProtocol {
    * }>}
    */
   async _resolveRoute (options) {
-    let sourceNetwork
-    if (options.sourceChain) {
-      sourceNetwork = await resolveNetworkByName(this._client, options.sourceChain)
-    } else {
-      const chainId = await this._getChainId()
-      sourceNetwork = await resolveSourceNetwork(this._client, chainId)
-    }
+    const sourceNetwork = options.sourceChain
+      ? await resolveNetworkByName(this._client, options.sourceChain)
+      : await this._detectSourceNetwork()
 
     const sourceToken = resolveToken(sourceNetwork, options.token)
     const destinationNetwork = await resolveNetworkByName(this._client, options.targetChain)

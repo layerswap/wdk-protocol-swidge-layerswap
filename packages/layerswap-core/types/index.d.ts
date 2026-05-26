@@ -7,5 +7,7 @@ export type LayerswapSwap = import("./src/layerswap-api-client.js").LayerswapSwa
 export type LayerswapSwapResponse = import("./src/layerswap-api-client.js").LayerswapSwapResponse;
 export type LayerswapCreateSwapParams = import("./src/layerswap-api-client.js").LayerswapCreateSwapParams;
 export type LayerswapGetQuoteParams = import("./src/layerswap-api-client.js").LayerswapGetQuoteParams;
+export type LayerswapTransactionStatus = import("./src/layerswap-api-client.js").LayerswapTransactionStatus;
+export type LayerswapTransactionStatusValue = import("./src/layerswap-api-client.js").LayerswapTransactionStatusValue;
 export { default, default as LayerswapApiClient } from "./src/layerswap-api-client.js";
 export { resolveSourceNetwork, resolveNetworkByName, resolveToken, formatBaseUnits, parseDecimal } from "./src/networks.js";

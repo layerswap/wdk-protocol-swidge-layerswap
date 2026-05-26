@@ -478,4 +478,39 @@ describe('LayerswapProtocolEvm', () => {
       })).rejects.toThrow(/does not support source chain/)
     })
   })
+
+  describe('getTransactionStatus', () => {
+    test('resolves the network via provider chainId and forwards to the API client', async () => {
+      global.fetch = buildFetchRouter([
+        NETWORKS_HANDLER,
+        {
+          method: 'GET',
+          match: /^\/api\/v2\/transaction_status\?network=ethereum&transaction_id=0xaa$/,
+          status: 200,
+          body: () => ({ data: { status: 'completed' } })
+        }
+      ])
+
+      const account = makeAccount()
+      const protocol = new LayerswapProtocolEvm(account)
+      await expect(protocol.getTransactionStatus('0xaa')).resolves.toEqual({ status: 'completed' })
+    })
+
+    test('honours sourceChain override and skips chainId detection', async () => {
+      global.fetch = buildFetchRouter([
+        NETWORKS_HANDLER,
+        {
+          method: 'GET',
+          match: /^\/api\/v2\/transaction_status\?network=arbitrum&transaction_id=0xbb$/,
+          status: 200,
+          body: () => ({ data: { status: 'pending' } })
+        }
+      ])
+
+      const account = makeAccount()
+      const protocol = new LayerswapProtocolEvm(account)
+      await expect(protocol.getTransactionStatus('0xbb', { sourceChain: 'arbitrum' }))
+        .resolves.toEqual({ status: 'pending' })
+    })
+  })
 })
