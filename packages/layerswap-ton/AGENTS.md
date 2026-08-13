@@ -1,6 +1,6 @@
 # Agent Guide — layerswap-ton
 
-Sibling of `layerswap-evm`, `layerswap-solana`, and `layerswap-tron` for the TON source VM. Implements `BridgeProtocol` for `@tetherto/wdk-wallet-ton` accounts.
+Sibling of `layerswap-evm`, `layerswap-solana`, and `layerswap-tron` for the TON source VM. Extends `SwidgeProtocol` (from `@tetherto/wdk-wallet/protocols`, >= 1.0.0-beta.16) for `@tetherto/wdk-wallet-ton` accounts, with the legacy `bridge`/`quoteBridge` surface kept as thin adapters over `swidge`.
 
 ## Project Overview
 
@@ -11,7 +11,7 @@ Sibling of `layerswap-evm`, `layerswap-solana`, and `layerswap-tron` for the TON
 
 - `index.js` — public entry: default export of `LayerswapProtocolTon` plus its config/options/result typedefs.
 - `bare.js` — Bare runtime wrapper.
-- `src/layerswap-protocol-ton.js` — `BridgeProtocol` implementation.
+- `src/layerswap-protocol-ton.js` — `SwidgeProtocol` implementation.
 - `tests/fixtures/RESEARCH-NOTES.md` — records what was verified live against Layerswap vs assumed from the Layerswap UI source code.
 - `types/` — generated; do not edit by hand.
 
@@ -28,17 +28,17 @@ For jetton transfers we cannot use `account.transfer(...)` because it bakes its 
 
 TON does not expose a stable network id the way EVM exposes `chainId`. Layerswap's `network.chain_id` is also `null` for `TON_MAINNET` (see `tests/fixtures/RESEARCH-NOTES.md`), and Layerswap only lists `TON_MAINNET` in the public catalog.
 
-The protocol therefore defaults to `TON_MAINNET` for the source chain. Users can override by passing `sourceChain: 'TON_<...>'` if Layerswap ever adds testnet support.
+The protocol therefore defaults to `TON_MAINNET` for the source chain. Users can override by passing `fromChain: 'TON_<...>'` (legacy: `sourceChain`) if Layerswap ever adds testnet support.
 
 ## Semantic notes (carried over from sibling packages)
 
-- `BridgeResult.bridgeFee` is in **source-token base units**, not native nanotons. Layerswap deducts its fee from the source amount.
-- `LayerswapProtocolConfig.bridgeMaxFee` is compared against `bridgeFee` only.
-- Do not naively sum `fee + bridgeFee` — different units.
+- Swidge fees are itemised: Layerswap's `included: true` entries are in **source-token base units**; the gas entry is non-included and in **nanotons**. Never sum across entries with different `token`s.
+- The TON wallet only reports actual gas from `sendTransaction`'s return, so `assertFeeGuards` runs pre-broadcast against the included Layerswap fees only; the actual gas entry is appended to the result afterwards.
+- Legacy `BridgeResult.bridgeFee` is in **source-token base units** (= sum of `included` swidge fees). `LayerswapProtocolConfig.bridgeMaxFee` is compared against that sum only.
 
 ## wdk-wallet version pin
 
-`@tetherto/wdk-wallet-ton@1.0.0-beta.8` pins `@tetherto/wdk-wallet@1.0.0-beta.8`. This package keeps `1.0.0-beta.8` as the dev pin so the `BridgeProtocol` base class and the wallet account's superclass come from the same copy. Peer dep is loosened to `>=1.0.0-beta.7` to remain compatible with the other siblings.
+All packages pin `@tetherto/wdk-wallet@1.0.0-beta.16` (the version verified to ship `SwidgeProtocol` with the current contract) as the dev dependency, with peer dep `>=1.0.0-beta.16`. The wallet-account packages bundle their own older copy of `@tetherto/wdk-wallet` — that's fine because accounts are consumed duck-typed, never via `instanceof`.
 
 ## Coding conventions
 

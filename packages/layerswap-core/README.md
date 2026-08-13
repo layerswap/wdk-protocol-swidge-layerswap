@@ -9,6 +9,14 @@ Chain-agnostic building blocks for the Layerswap WDK bridge packages. This packa
 - `resolveNetworkByName(client, name)` — case-insensitive lookup by network name.
 - `resolveToken(network, identifier)` — finds a token within a network by 0x-prefixed address or symbol.
 - `formatBaseUnits(baseUnits, decimals)` / `parseDecimal(value, decimals)` — base-unit ⇄ decimal-string conversion. Used to build Layerswap API request bodies (which expect decimal strings).
+- WDK Swidge mapping helpers (`src/swidge.js`) — shared by every VM package so the `SwidgeProtocol` implementations stay thin:
+  - `mapSwapStatus(status)` / `mapSwapTransactions(txs)` / `buildStatusResult(swapResponse)` — Layerswap swap lifecycle → WDK `SwidgeStatus`/`SwidgeTransaction` vocabulary.
+  - `buildSupportedChains(networks)` / `buildSupportedTokens(networks, options)` — network catalog → WDK `SwidgeSupportedChain`/`SwidgeSupportedToken` shapes.
+  - `buildSwidgeQuote(quote, sourceToken, destinationToken, sourceChain)` / `buildQuoteFees(...)` — Layerswap quote → WDK `SwidgeQuote` with itemised, source-token-denominated `included` fees (falls back to a single `total_fee` entry when the breakdown is absent).
+  - `formatSlippage(slippage)` — WDK decimal slippage (0.01 = 1%) → Layerswap percent string (`'1'`).
+  - `assertFeeGuards(fees, fromTokenAmount, sourceTokenSymbol, config)` — enforces the WDK `maxNetworkFeeBps`/`maxProtocolFeeBps` guards over same-unit fee entries.
+
+  These helpers structurally match the swidge typedefs in `@tetherto/wdk-wallet/protocols` but are declared locally, so this package keeps zero WDK dependency.
 
 ## Semantic notes
 

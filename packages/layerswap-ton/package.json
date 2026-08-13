@@ -1,10 +1,12 @@
 {
   "name": "@layerswap/wdk-protocol-bridge-layerswap-ton",
   "version": "1.0.0-beta.1",
-  "description": "WDK module that lets @tetherto/wdk-wallet-ton wallet accounts bridge tokens across chains via the Layerswap public API.",
+  "description": "WDK Swidge module that lets @tetherto/wdk-wallet-ton wallet accounts swap and bridge tokens across chains via the Layerswap public API, using the ISwidgeProtocol interface.",
   "keywords": [
     "wdk",
     "protocol",
+    "swidge",
+    "swap",
     "bridge",
     "layerswap",
     "ton"
@@ -25,13 +27,13 @@
     "bare-node-runtime": "^1.1.4"
   },
   "peerDependencies": {
-    "@tetherto/wdk-wallet": ">=1.0.0-beta.7",
+    "@tetherto/wdk-wallet": ">=1.0.0-beta.16",
     "@tetherto/wdk-wallet-ton": ">=1.0.0-beta.7",
     "@ton/ton": ">=15.0.0"
   },
   "devDependencies": {
-    "@tetherto/wdk-wallet": "1.0.0-beta.8",
-    "@tetherto/wdk-wallet-ton": "1.0.0-beta.8",
+    "@tetherto/wdk-wallet": "1.0.0-beta.16",
+    "@tetherto/wdk-wallet-ton": "1.0.0-beta.12",
     "@ton/ton": "15.1.0",
     "cross-env": "10.0.0",
     "jest": "30.0.5",

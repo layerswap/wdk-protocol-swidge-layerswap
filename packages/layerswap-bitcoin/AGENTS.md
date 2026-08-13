@@ -1,6 +1,6 @@
 # Agent Guide — layerswap-bitcoin
 
-Sibling of `layerswap-evm`, `layerswap-solana`, `layerswap-tron`, and `layerswap-ton` for the Bitcoin source VM. Implements `BridgeProtocol` for `@tetherto/wdk-wallet-btc` accounts.
+Sibling of `layerswap-evm`, `layerswap-solana`, `layerswap-tron`, and `layerswap-ton` for the Bitcoin source VM. Extends `SwidgeProtocol` (from `@tetherto/wdk-wallet/protocols`, >= 1.0.0-beta.16) for `@tetherto/wdk-wallet-btc` accounts, with the legacy `bridge`/`quoteBridge` surface kept as thin adapters over `swidge`.
 
 ## Project Overview
 
@@ -11,7 +11,7 @@ Sibling of `layerswap-evm`, `layerswap-solana`, `layerswap-tron`, and `layerswap
 
 - `index.js` — public entry: default export of `LayerswapProtocolBitcoin` plus its config/options/result typedefs.
 - `bare.js` — Bare runtime wrapper.
-- `src/layerswap-protocol-bitcoin.js` — `BridgeProtocol` implementation.
+- `src/layerswap-protocol-bitcoin.js` — `SwidgeProtocol` implementation.
 - `tests/fixtures/RESEARCH-NOTES.md` — records what was verified live against Layerswap vs assumed from the Layerswap UI source code.
 - `types/` — generated; do not edit by hand.
 
@@ -39,7 +39,7 @@ The protocol reaches into several wallet internals (`_client`, `_masterNode`, `_
 
 Layerswap currently only lists `BITCOIN_MAINNET` in the public catalog. The wallet's `config.network` is one of `bitcoin` / `regtest` / `testnet`; the protocol maps these to `BITCOIN_MAINNET`, `BITCOIN_REGTEST`, `BITCOIN_TESTNET` respectively. Mainnet is the only one that resolves today; the others are reserved.
 
-Users can override the mapping by passing `sourceChain` explicitly.
+Users can override the mapping by passing `fromChain` explicitly (legacy: `sourceChain`).
 
 ## `call_data` encoding (matches Layerswap UI)
 
@@ -47,12 +47,13 @@ Layerswap returns the swap reference id as a numeric string in `call_data`. The 
 
 ## Semantic notes (carried over from sibling packages)
 
-- `BridgeResult.bridgeFee` is in **source-token base units** (satoshis), not native gas. Layerswap deducts its fee from the source amount.
-- `LayerswapProtocolConfig.bridgeMaxFee` is compared against `bridgeFee` only.
+- Swidge fees are itemised: Layerswap's `included: true` entries are in **source-token base units** (satoshis); the network-fee entry (the PSBT fee) is non-included and also in satoshis, but keyed to the `'BTC'` token. Never sum across entries with different `token`s.
+- In `swidge()` the PSBT is built and signed before the fee guards run (the real fee is only knowable from the built PSBT), but broadcast happens strictly after all guards pass.
+- Legacy `BridgeResult.bridgeFee` is in **source-token base units** (= sum of `included` swidge fees). `LayerswapProtocolConfig.bridgeMaxFee` is compared against that sum only.
 
 ## wdk-wallet version pin
 
-`@tetherto/wdk-wallet-btc@1.0.0-beta.9` pins `@tetherto/wdk-wallet@1.0.0-beta.8`. This package keeps `1.0.0-beta.8` as the dev pin to match.
+All packages pin `@tetherto/wdk-wallet@1.0.0-beta.16` (the version verified to ship `SwidgeProtocol` with the current contract) as the dev dependency, with peer dep `>=1.0.0-beta.16`. The wallet-account packages bundle their own older copy of `@tetherto/wdk-wallet` — that's fine because accounts are consumed duck-typed, never via `instanceof`.
 
 ## Coding conventions
 

@@ -1,6 +1,6 @@
 # Agent Guide
 
-This repository is a monorepo of WDK bridge modules for the Layerswap protocol. It follows the conventions established by the Tether WDK (Wallet Development Kit) ecosystem — each package implements `BridgeProtocol` from `@tetherto/wdk-wallet/protocols` for a specific source-VM family.
+This repository is a monorepo of WDK Swidge (swap + bridge) modules for the Layerswap protocol. It follows the conventions established by the Tether WDK (Wallet Development Kit) ecosystem — each package extends `SwidgeProtocol` from `@tetherto/wdk-wallet/protocols` (>= 1.0.0-beta.16) for a specific source-VM family, implementing `quoteSwidge` / `swidge` / `getSwidgeStatus` / `getSupportedChains` / `getSupportedTokens`. The legacy bridge-module surface (`bridge`/`quoteBridge`) is kept as thin adapters over `swidge` for backwards compatibility, and the base class derives `swap`/`quoteSwap` automatically.
 
 ## Repository shape
 
@@ -11,7 +11,7 @@ This repository is a monorepo of WDK bridge modules for the Layerswap protocol. 
 
 ## Why one package per VM family (not master, not per chain)
 
-`BridgeProtocol` is parameterised by the wallet account class (`WalletAccountEvm`, `WalletAccountSolana`, …). Different VM families have different signing semantics, providers, and transaction shapes, so they cannot share a single class. Within a VM family chains DO share semantics, so a single package covers all of them via the live Layerswap network catalog (`GET /api/v2/networks`).
+`SwidgeProtocol` is parameterised by the wallet account class (`WalletAccountEvm`, `WalletAccountSolana`, …). Different VM families have different signing semantics, providers, and transaction shapes, so they cannot share a single class. Within a VM family chains DO share semantics, so a single package covers all of them via the live Layerswap network catalog (`GET /api/v2/networks`). Chain-agnostic swidge mapping (status vocabulary, fee itemisation, chain/token discovery, slippage conversion, fee-bps guards) lives in `packages/layerswap-core/src/swidge.js` and is shared by every VM package.
 
 ## Tech stack (shared across packages)
 
@@ -44,6 +44,8 @@ Per-package: `pnpm --filter @layerswap/wdk-protocol-bridge-layerswap-evm run <sc
 
 ## Semantic notes (Layerswap-specific)
 
-- `BridgeResult.bridgeFee` is in **source-token base units**, not native wei. Layerswap deducts its fee from the bridged amount instead of charging native gas. The WDK base type documents it as native — this divergence is intentional and called out in each package's JSDoc and README.
-- `LayerswapProtocolConfig.bridgeMaxFee` is compared against `bridgeFee` only.
-- Do not naively sum `fee + bridgeFee` — they are in different units.
+- Swidge fee entries are itemised per `SwidgeFee`: Layerswap's service fee ('protocol') and its destination network fee ('network') are deducted from the source amount, denominated in the **source token**, and flagged `included: true`; source-chain gas is a separate non-included 'network' fee in the **native token**. Never sum amounts across fee entries with different `token` values.
+- Layerswap supports **exact-in only** (`fromTokenAmount`); passing `toTokenAmount` (exact-out) throws. Same-chain swaps are not supported: `toChain` is required and must differ from the source network, so the inherited `swap()` (same-chain by definition) always throws.
+- WDK swidge `slippage` is a decimal (0.01 = 1%); the Layerswap API takes a percent string ('1'). `formatSlippage` in core converts. The legacy `BridgeOptions.slippage` remains a percent string and is divided by 100 in the `_toSwidgeOptions` adapters.
+- Swidge status derivation (core `deriveSwidgeStatus`) is **transaction-first**: a completed output (payout) transaction → 'completed', a refund transaction → 'refunded'/'refund-pending', an in-flight output → 'pending' — the swap-level status is only the fallback, because Layerswap's swap status can lag the on-chain payout. Fallback mapping (`mapSwapStatus`): `user_transfer_pending` → 'action-required', `ls_transfer_pending` → 'pending', `pending_refund` → 'refund-pending', terminal states map 1:1, unknown → 'pending'.
+- Legacy surface: `BridgeResult.bridgeFee` is in **source-token base units**, not native wei (= the sum of `included` swidge fees). `LayerswapProtocolConfig.bridgeMaxFee` is compared against that sum only. Do not naively sum `fee + bridgeFee` — they are in different units.

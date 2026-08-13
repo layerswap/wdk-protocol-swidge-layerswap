@@ -37,18 +37,41 @@ const TEST_SEED = Buffer.alloc(64).fill(0xab) // deterministic seed for tests
 const TEST_NETWORK = networks.bitcoin
 const TEST_PATH = "m/84'/0'/0'/0/0"
 
-function buildTestKeys () {
-  const masterNode = bip32.fromSeed(TEST_SEED, TEST_NETWORK)
-  const childNode = masterNode.derivePath(TEST_PATH)
-  const { address } = payments.p2wpkh({ pubkey: childNode.publicKey, network: TEST_NETWORK })
-  return { masterNode, childNode, address }
+// bip32 v5 returns Uint8Arrays for keys/fingerprints/signatures, while bitcoinjs-lib 6
+// expects Buffers (typeforce `isPoint`, `node.publicKey.equals`, partialSig serialisation).
+// Wrap the node in a Buffer-returning HDSigner adapter, matching the Buffer-based master
+// node the wallet package hands to `psbt.signInputHD`.
+function toHdSigner (node) {
+  return {
+    get publicKey () { return Buffer.from(node.publicKey) },
+    get fingerprint () { return Buffer.from(node.fingerprint) },
+    derivePath (path) { return toHdSigner(node.derivePath(path)) },
+    sign (hash, lowR) { return Buffer.from(node.sign(hash, lowR)) }
+  }
 }
 
-const { masterNode: TEST_MASTER_NODE, childNode: TEST_CHILD_NODE, address: SENDER_ADDRESS } = buildTestKeys()
+function buildTestKeys () {
+  // The raw bip32 v5 node returns Uint8Arrays — exactly what the real wallet's
+  // `_masterNode` hands the protocol. The protocol's `_toBufferHdSigner` is
+  // responsible for the Buffer coercion, so the account fixture must NOT pre-wrap.
+  const rawMasterNode = bip32.fromSeed(TEST_SEED, TEST_NETWORK)
+  const rawChildNode = rawMasterNode.derivePath(TEST_PATH)
+  const masterNode = toHdSigner(rawMasterNode)
+  const childNode = masterNode.derivePath(TEST_PATH)
+  const { address } = payments.p2wpkh({ pubkey: childNode.publicKey, network: TEST_NETWORK })
+  return { rawMasterNode, rawChildNode, masterNode, childNode, address }
+}
+
+const {
+  rawMasterNode: TEST_RAW_MASTER_NODE,
+  rawChildNode: TEST_RAW_CHILD_NODE,
+  childNode: TEST_CHILD_NODE,
+  address: SENDER_ADDRESS
+} = buildTestKeys()
 
 // Layerswap's deposit address (valid mainnet P2WPKH, not the sender's).
 const DEPOSIT_ADDRESS = payments.p2wpkh({
-  pubkey: bip32.fromSeed(TEST_SEED.fill(0xcd), TEST_NETWORK).derivePath("m/84'/0'/0'/0/0").publicKey,
+  pubkey: Buffer.from(bip32.fromSeed(TEST_SEED.fill(0xcd), TEST_NETWORK).derivePath("m/84'/0'/0'/0/0").publicKey),
   network: TEST_NETWORK
 }).address
 
@@ -129,8 +152,9 @@ function makeAccount ({
   }
 
   if (writable) {
-    account._masterNode = TEST_MASTER_NODE
-    account._account = { publicKey: TEST_CHILD_NODE.publicKey }
+    // Raw v5 node + Uint8Array pubkey — the protocol must coerce these itself.
+    account._masterNode = TEST_RAW_MASTER_NODE
+    account._account = { publicKey: TEST_RAW_CHILD_NODE.publicKey }
   }
 
   return { account, client, broadcast, listUnspent, estimateFeeFn }
@@ -147,7 +171,7 @@ const NETWORKS_HANDLER = {
   body: () => ({ data: NETWORKS })
 }
 
-const QUOTE_HANDLER = {
+const makeQuoteHandler = (overrides = {}) => ({
   method: 'GET',
   match: /^\/api\/v2\/quote\?/,
   status: 200,
@@ -160,11 +184,14 @@ const QUOTE_HANDLER = {
         total_fee: 0.0001,
         total_fee_in_usd: 7,
         blockchain_fee: 0.00009,
-        service_fee: 0.00001
+        service_fee: 0.00001,
+        ...overrides
       }
     }
   })
-}
+})
+
+const QUOTE_HANDLER = makeQuoteHandler()
 
 function makeCreateSwapHandler ({
   totalFee = 0.0001,
@@ -276,12 +303,20 @@ describe('LayerswapProtocolBitcoin', () => {
   })
 
   describe('_encodeCallDataMemo', () => {
-    test('encodes numeric call_data via Number(c).toString(16) stored as UTF-8 bytes', () => {
+    test('encodes the numeric sequence via BigInt(seq).toString(16) stored as UTF-8 bytes', () => {
       const { account } = makeAccount()
       const p = new LayerswapProtocolBitcoin(account)
       const memo = p._encodeCallDataMemo('7745')
-      // Number('7745').toString(16) === '1e41'
+      // BigInt('7745').toString(16) === '1e41'
       expect(memo.toString('utf8')).toBe('1e41')
+    })
+
+    test('hex-encodes only the part before ";" and appends the tail verbatim', () => {
+      const { account } = makeAccount()
+      const p = new LayerswapProtocolBitcoin(account)
+      // BigInt('13646').toString(16) === '354e'
+      expect(p._encodeCallDataMemo('13646;').toString('utf8')).toBe('354e;')
+      expect(p._encodeCallDataMemo('13646;extra').toString('utf8')).toBe('354e;extra')
     })
 
     test('returns empty buffer for null/undefined/empty', () => {
@@ -292,28 +327,17 @@ describe('LayerswapProtocolBitcoin', () => {
       expect(p._encodeCallDataMemo('').length).toBe(0)
     })
 
-    test('throws when call_data is not a finite number', () => {
+    test('throws when the sequence part is not numeric', () => {
       const { account } = makeAccount()
       const p = new LayerswapProtocolBitcoin(account)
-      expect(() => p._encodeCallDataMemo('not-a-number')).toThrow(/finite number/)
+      expect(() => p._encodeCallDataMemo('not-a-number')).toThrow(/numeric sequence/)
+      expect(() => p._encodeCallDataMemo('nan;tail')).toThrow(/numeric sequence/)
     })
 
     test('throws when encoded payload exceeds 80 bytes', () => {
       const { account } = makeAccount()
       const p = new LayerswapProtocolBitcoin(account)
-      // To exceed 80 hex chars we need Number(x).toString(16) > 80 chars → numbers can't reach that.
-      // Force via monkey-patching: provide a fake number that has a long hex repr. Use a number near
-      // max safe integer — max is 13 hex chars. So natural numbers can't trigger this.
-      // Verify the guard works by stubbing Number to return one that toStrings to 81+ chars.
-      const longHex = 'f'.repeat(81)
-      const origNumber = global.Number
-      global.Number = function (v) { return { toString: () => longHex, valueOf: () => 1 } }
-      global.Number.isFinite = () => true
-      try {
-        expect(() => p._encodeCallDataMemo('whatever')).toThrow(/80-byte/)
-      } finally {
-        global.Number = origNumber
-      }
+      expect(() => p._encodeCallDataMemo(`1;${'x'.repeat(90)}`)).toThrow(/80-byte/)
     })
   })
 
@@ -394,7 +418,7 @@ describe('LayerswapProtocolBitcoin', () => {
       // Output #0 = deposit.
       expect(tx.outs[0].value).toBe(100_000)
 
-      // Output #1 = OP_RETURN with hex-of-Number(callData).toString(16).
+      // Output #1 = OP_RETURN with hex-of-BigInt(seq).toString(16) (+ verbatim tail).
       const opReturnScript = tx.outs[1].script
       expect(opReturnScript[0]).toBe(0x6a) // OP_RETURN opcode
       // Skip the push opcode + length byte; remaining bytes are the memo (UTF-8 of '1e41').
@@ -656,6 +680,272 @@ describe('LayerswapProtocolBitcoin', () => {
       const p = new LayerswapProtocolBitcoin(account)
       await expect(p.getTransactionStatus('txid-bb', { sourceChain: 'BITCOIN_TESTNET' }))
         .resolves.toEqual({ status: 'pending' })
+    })
+  })
+
+  describe('quoteSwidge', () => {
+    test('maps the Layerswap quote to a WDK swidge quote with itemised fees and the BTC fee approximation', async () => {
+      global.fetch = buildFetchRouter([NETWORKS_HANDLER, makeQuoteHandler({ avg_completion_time: '00:02:30' })])
+
+      const { account } = makeAccount()
+      const p = new LayerswapProtocolBitcoin(account)
+
+      const quote = await p.quoteSwidge({
+        fromToken: 'BTC',
+        toToken: 'WBTC',
+        toChain: 'ARBITRUM_MAINNET',
+        fromTokenAmount: 100_000n,
+        slippage: 0.01
+      })
+
+      expect(quote.fromTokenAmount).toBe(100_000n)
+      expect(quote.toTokenAmount).toBe(90_000n)
+      expect(quote.toTokenAmountMin).toBe(89_000n)
+      expect(quote.estimatedDuration).toBe(150)
+      expect(quote.fees).toEqual([
+        expect.objectContaining({ type: 'protocol', amount: 1_000n, token: 'BTC', included: true }),
+        expect.objectContaining({ type: 'network', amount: 9_000n, token: 'BTC', included: true }),
+        expect.objectContaining({ type: 'network', amount: 1_500n, token: 'BTC', included: false })
+      ])
+    })
+
+    test('converts the WDK decimal slippage to a Layerswap percent string', async () => {
+      const fetchMock = buildFetchRouter([NETWORKS_HANDLER, QUOTE_HANDLER])
+      global.fetch = fetchMock
+
+      const { account } = makeAccount()
+      const p = new LayerswapProtocolBitcoin(account)
+
+      await p.quoteSwidge({
+        fromToken: 'BTC',
+        toToken: 'WBTC',
+        toChain: 'ARBITRUM_MAINNET',
+        fromTokenAmount: 100_000n,
+        slippage: 0.005
+      })
+
+      const quoteCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/api/v2/quote'))
+      expect(String(quoteCall[0])).toContain('slippage=0.5')
+    })
+
+    test('rejects exact-out operations', async () => {
+      global.fetch = buildFetchRouter([NETWORKS_HANDLER])
+
+      const { account } = makeAccount()
+      const p = new LayerswapProtocolBitcoin(account)
+
+      await expect(p.quoteSwidge({
+        fromToken: 'BTC',
+        toToken: 'WBTC',
+        toChain: 'ARBITRUM_MAINNET',
+        toTokenAmount: 100_000n
+      })).rejects.toThrow('exact-in')
+    })
+
+    test('rejects same-chain swaps (toChain missing)', async () => {
+      global.fetch = buildFetchRouter([NETWORKS_HANDLER])
+
+      const { account } = makeAccount()
+      const p = new LayerswapProtocolBitcoin(account)
+
+      await expect(p.quoteSwidge({
+        fromToken: 'BTC',
+        toToken: 'WBTC',
+        fromTokenAmount: 100_000n
+      })).rejects.toThrow('same-chain')
+    })
+
+    test('omits the source-chain gas fee entry when no account is bound', async () => {
+      global.fetch = buildFetchRouter([NETWORKS_HANDLER, QUOTE_HANDLER])
+
+      const p = new LayerswapProtocolBitcoin(undefined)
+
+      const quote = await p.quoteSwidge({
+        fromChain: 'BITCOIN_MAINNET',
+        fromToken: 'BTC',
+        toToken: 'WBTC',
+        toChain: 'ARBITRUM_MAINNET',
+        fromTokenAmount: 100_000n
+      })
+
+      expect(quote.fees).toHaveLength(2)
+      expect(quote.fees.every((f) => f.included)).toBe(true)
+    })
+  })
+
+  describe('swidge', () => {
+    test('creates the swap, broadcasts the PSBT deposit, and returns a WDK swidge result', async () => {
+      global.fetch = buildFetchRouter([
+        NETWORKS_HANDLER,
+        makeCreateSwapHandler({ callData: '7745' }),
+        SPEEDUP_HANDLER
+      ])
+
+      const { account, broadcast } = makeAccount()
+      const p = new LayerswapProtocolBitcoin(account)
+
+      const result = await p.swidge({
+        fromToken: 'BTC',
+        toToken: 'WBTC',
+        toChain: 'ARBITRUM_MAINNET',
+        recipient: '0xa460AEbce0d3A4BecAd8ccf9D6D4861296c503Bd',
+        fromTokenAmount: 100_000n
+      })
+
+      expect(result.id).toBe('swap-btc-123')
+      expect(result.fromTokenAmount).toBe(100_000n)
+      expect(result.toTokenAmount).toBe(90_000n)
+      expect(result.toTokenAmountMin).toBe(89_000n)
+
+      // Included Layerswap fees (source-token sats) + the non-included PSBT fee.
+      expect(result.fees).toEqual([
+        expect.objectContaining({ type: 'protocol', amount: 1_000n, token: 'BTC', included: true }),
+        expect.objectContaining({ type: 'network', amount: 9_000n, token: 'BTC', included: true }),
+        expect.objectContaining({ type: 'network', token: 'BTC', chain: 'BITCOIN_MAINNET', included: false })
+      ])
+      const gasFee = result.fees.find((f) => !f.included)
+      expect(gasFee.amount).toBeGreaterThan(0n)
+
+      expect(broadcast).toHaveBeenCalledTimes(1)
+      const tx = Transaction.fromHex(broadcast.mock.calls[0][0])
+      expect(result.hash).toBe(tx.getId())
+      expect(result.transactions).toEqual([{ hash: tx.getId(), chain: 'BITCOIN_MAINNET', type: 'source' }])
+
+      // Output #0 = deposit, output #1 = OP_RETURN with hex-of-Number(call_data).
+      expect(tx.outs[0].value).toBe(100_000)
+      expect(tx.outs[1].script[0]).toBe(0x6a)
+      expect(tx.outs[1].script.subarray(2).toString('utf8')).toBe('1e41')
+    })
+
+    test('requires an explicit recipient for cross-VM destinations', async () => {
+      global.fetch = buildFetchRouter([NETWORKS_HANDLER])
+
+      const { account, broadcast } = makeAccount()
+      const p = new LayerswapProtocolBitcoin(account)
+
+      await expect(p.swidge({
+        fromToken: 'BTC',
+        toToken: 'WBTC',
+        toChain: 'ARBITRUM_MAINNET',
+        fromTokenAmount: 100_000n
+      })).rejects.toThrow(/recipient/)
+
+      expect(broadcast).not.toHaveBeenCalled()
+    })
+
+    test('enforces maxProtocolFeeBps and does not broadcast', async () => {
+      global.fetch = buildFetchRouter([
+        NETWORKS_HANDLER,
+        makeCreateSwapHandler(),
+        SPEEDUP_HANDLER
+      ])
+
+      const { account, broadcast } = makeAccount()
+      const p = new LayerswapProtocolBitcoin(account)
+
+      // service_fee 0.00001 BTC = 1000 sats on 100_000 sats input = 100 bps.
+      await expect(p.swidge({
+        fromToken: 'BTC',
+        toToken: 'WBTC',
+        toChain: 'ARBITRUM_MAINNET',
+        recipient: '0xa460AEbce0d3A4BecAd8ccf9D6D4861296c503Bd',
+        fromTokenAmount: 100_000n
+      }, { maxProtocolFeeBps: 99 })).rejects.toThrow('maximum protocol fee')
+
+      expect(broadcast).not.toHaveBeenCalled()
+    })
+
+    test('throws when the quoted minimum output is below minAmountOut, and does not broadcast', async () => {
+      global.fetch = buildFetchRouter([
+        NETWORKS_HANDLER,
+        makeCreateSwapHandler(),
+        SPEEDUP_HANDLER
+      ])
+
+      const { account, broadcast } = makeAccount()
+      const p = new LayerswapProtocolBitcoin(account)
+
+      // toTokenAmountMin is 89_000 sats of WBTC.
+      await expect(p.swidge({
+        fromToken: 'BTC',
+        toToken: 'WBTC',
+        toChain: 'ARBITRUM_MAINNET',
+        recipient: '0xa460AEbce0d3A4BecAd8ccf9D6D4861296c503Bd',
+        fromTokenAmount: 100_000n,
+        minAmountOut: 90_000n
+      })).rejects.toThrow('minAmountOut')
+
+      expect(broadcast).not.toHaveBeenCalled()
+    })
+
+    test('throws for read-only accounts', async () => {
+      const { account } = makeAccount({ writable: false })
+      const p = new LayerswapProtocolBitcoin(account)
+
+      await expect(p.swidge({
+        fromToken: 'BTC',
+        toToken: 'WBTC',
+        toChain: 'ARBITRUM_MAINNET',
+        recipient: '0xa460AEbce0d3A4BecAd8ccf9D6D4861296c503Bd',
+        fromTokenAmount: 100_000n
+      })).rejects.toThrow('non read-only account')
+    })
+  })
+
+  describe('getSwidgeStatus', () => {
+    test('maps the Layerswap swap status and transactions to the WDK vocabulary', async () => {
+      global.fetch = buildFetchRouter([{
+        method: 'GET',
+        match: /^\/api\/v2\/swaps\/swap-btc-123$/,
+        status: 200,
+        body: () => ({
+          data: {
+            swap: {
+              id: 'swap-btc-123',
+              status: 'ls_transfer_pending',
+              transactions: [
+                { transaction_hash: 'btc-txid-1', type: 'input', status: 'completed', network: BITCOIN_MAINNET },
+                { transaction_hash: '0xoutput', type: 'output', status: 'initiated', network: ARBITRUM_MAINNET }
+              ]
+            }
+          }
+        })
+      }])
+
+      const { account } = makeAccount()
+      const p = new LayerswapProtocolBitcoin(account)
+
+      await expect(p.getSwidgeStatus('swap-btc-123')).resolves.toEqual({
+        status: 'pending',
+        transactions: [
+          { hash: 'btc-txid-1', chain: 'BITCOIN_MAINNET', type: 'source' },
+          { hash: '0xoutput', chain: 'ARBITRUM_MAINNET', type: 'destination' }
+        ]
+      })
+    })
+  })
+
+  describe('discovery', () => {
+    test('getSupportedChains maps the network catalog without an account', async () => {
+      global.fetch = buildFetchRouter([NETWORKS_HANDLER])
+
+      const p = new LayerswapProtocolBitcoin(undefined)
+
+      await expect(p.getSupportedChains()).resolves.toEqual([
+        { id: 'BITCOIN_MAINNET', name: 'BITCOIN_MAINNET', type: 'bitcoin', nativeToken: '' },
+        { id: 'ARBITRUM_MAINNET', name: 'ARBITRUM_MAINNET', type: 'evm', nativeToken: '' }
+      ])
+    })
+
+    test('getSupportedTokens flattens and scopes by chain', async () => {
+      global.fetch = buildFetchRouter([NETWORKS_HANDLER])
+
+      const p = new LayerswapProtocolBitcoin(undefined)
+
+      const tokens = await p.getSupportedTokens({ toChain: 'ARBITRUM_MAINNET' })
+      expect(tokens).toEqual([
+        expect.objectContaining({ token: 'WBTC', chain: 'ARBITRUM_MAINNET', symbol: 'WBTC', decimals: 8 })
+      ])
     })
   })
 })

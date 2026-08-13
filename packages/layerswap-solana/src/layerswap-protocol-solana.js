@@ -14,17 +14,30 @@
 
 'use strict'
 
-import { BridgeProtocol } from '@tetherto/wdk-wallet/protocols'
+import { SwidgeProtocol } from '@tetherto/wdk-wallet/protocols'
 import { Connection, Keypair, Transaction } from '@solana/web3.js'
 
 import LayerswapApiClient, {
   resolveNetworkByName,
   resolveToken,
   formatBaseUnits,
-  parseDecimal
+  buildStatusResult,
+  buildSupportedChains,
+  buildSupportedTokens,
+  buildSwidgeQuote,
+  formatSlippage,
+  assertFeeGuards
 } from '@layerswap/wdk-protocol-bridge-layerswap-core'
 
-/** @typedef {import('@tetherto/wdk-wallet/protocols').BridgeProtocolConfig} BridgeProtocolConfig */
+/** @typedef {import('@tetherto/wdk-wallet/protocols').SwidgeProtocolConfig} SwidgeProtocolConfig */
+/** @typedef {import('@tetherto/wdk-wallet/protocols').SwidgeOptions} SwidgeOptions */
+/** @typedef {import('@tetherto/wdk-wallet/protocols').SwidgeQuote} SwidgeQuote */
+/** @typedef {import('@tetherto/wdk-wallet/protocols').SwidgeResult} SwidgeResult */
+/** @typedef {import('@tetherto/wdk-wallet/protocols').SwidgeFee} SwidgeFee */
+/** @typedef {import('@tetherto/wdk-wallet/protocols').SwidgeStatusResult} SwidgeStatusResult */
+/** @typedef {import('@tetherto/wdk-wallet/protocols').SwidgeSupportedChain} SwidgeSupportedChain */
+/** @typedef {import('@tetherto/wdk-wallet/protocols').SwidgeSupportedToken} SwidgeSupportedToken */
+/** @typedef {import('@tetherto/wdk-wallet/protocols').SwidgeSupportedTokensOptions} SwidgeSupportedTokensOptions */
 /** @typedef {import('@tetherto/wdk-wallet/protocols').BridgeResult} BridgeResult */
 
 /** @typedef {import('@tetherto/wdk-wallet-solana').WalletAccountSolana} WalletAccountSolana */
@@ -33,6 +46,8 @@ import LayerswapApiClient, {
 /** @typedef {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapNetwork} LayerswapNetwork */
 /** @typedef {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapToken} LayerswapToken */
 /** @typedef {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapDepositAction} LayerswapDepositAction */
+/** @typedef {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapSwap} LayerswapSwap */
+/** @typedef {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapQuote} LayerswapQuote */
 
 /**
  * Known Solana cluster genesis hashes → Layerswap network names.
@@ -50,14 +65,29 @@ const GENESIS_HASH_TO_NETWORK_NAME = Object.freeze({
 /* eslint-enable quote-props */
 
 /**
- * @typedef {Object} LayerswapProtocolConfig
+ * @typedef {SwidgeProtocolConfig & Object} LayerswapProtocolConfig
  * @property {string} [apiKey]                - Optional Layerswap API key. When set, sent as the
  *                                              `X-LS-APIKEY` header for rate-limit / partner attribution.
  * @property {string} [apiUrl]                - Layerswap API base URL. Default: `https://api.layerswap.io`.
+ * @property {number | bigint} [maxNetworkFeeBps]  - Maximum acceptable network fee in basis points of the
+ *                                              input amount (WDK swidge guard).
+ * @property {number | bigint} [maxProtocolFeeBps] - Maximum acceptable protocol fee in basis points of the
+ *                                              input amount (WDK swidge guard).
  * @property {number | bigint} [bridgeMaxFee] - Maximum acceptable Layerswap swap fee, expressed in
- *                                              *source-token base units*. Compared against `bridgeFee`
- *                                              before broadcasting the deposit transaction.
+ *                                              *source-token base units*. Compared against the total
+ *                                              Layerswap fee before broadcasting the deposit transaction.
  * @property {number} [requestTimeoutMs]      - HTTP timeout for Layerswap API calls. Default: 30000.
+ */
+
+/**
+ * Layerswap-specific extensions to the WDK swidge options.
+ *
+ * @typedef {SwidgeOptions & Object} LayerswapSwidgeOptions
+ * @property {string | number} [fromChain]    - Layerswap source network name (e.g. `'SOLANA_MAINNET'`).
+ *                                              Defaults to the network detected from the connected RPC's
+ *                                              genesis hash.
+ * @property {boolean} [refuel]               - Request a native-gas drop on the destination chain.
+ * @property {string} [referenceId]           - External reference id for the created swap.
  */
 
 /**
@@ -84,11 +114,15 @@ const GENESIS_HASH_TO_NETWORK_NAME = Object.freeze({
  */
 
 // Standard per-signature fee floor for Solana. Used as a quote-time approximation only;
-// the real fee is read from the deserialised deposit transaction at bridge() time.
+// the real fee is read from the deserialised deposit transaction at swidge() time.
 const SOLANA_PER_SIGNATURE_FEE_LAMPORTS = 5000n
 
 /**
- * Bridge protocol that drives a Layerswap swap from a Solana wallet account.
+ * WDK swidge protocol that drives a Layerswap swap from a Solana wallet account.
+ *
+ * Implements the `SwidgeProtocol` interface from `@tetherto/wdk-wallet/protocols`:
+ * `quoteSwidge` / `swidge` / `getSwidgeStatus` / `getSupportedChains` / `getSupportedTokens`,
+ * which also provides the WDK `swap`/`bridge` module surfaces via the base class.
  *
  * Unlike on-chain bridges this protocol is HTTP-orchestrated:
  *   1. POST /api/v2/swaps to create a swap and receive a deposit transaction blob.
@@ -96,11 +130,15 @@ const SOLANA_PER_SIGNATURE_FEE_LAMPORTS = 5000n
  *      it from the user's wallet.
  *   3. Layerswap performs the destination-chain payout off-chain.
  *
- * Semantic note: `BridgeResult.bridgeFee` is documented in `@tetherto/wdk-wallet` as
- * "native tokens paid to the bridge protocol". Layerswap deducts its fee from the
- * source-token amount instead, so we return `bridgeFee` in **source-token base units**.
- * Do not naively add `fee` (native lamports) and `bridgeFee` together — they are in
- * different units. The `bridgeMaxFee` config compares against `bridgeFee` only.
+ * `swidge()` resolves once the source-chain deposit transaction has been broadcast; the
+ * destination payout completes asynchronously and can be tracked with
+ * `getSwidgeStatus(result.id)`.
+ *
+ * Fee semantics: Layerswap deducts its fees from the source-token amount, so 'protocol'
+ * and Layerswap's destination 'network' fee entries are denominated in the **source
+ * token** and flagged `included: true`. Source-chain gas is a separate non-included
+ * 'network' fee in the **native token** (lamports). Do not sum amounts across fee
+ * entries with different `token` values.
  *
  * Implementation note: the deposit transaction is broadcast through `@solana/web3.js`
  * (legacy SDK) rather than `account.sendTransaction(...)`. Layerswap's `call_data` is a
@@ -108,14 +146,26 @@ const SOLANA_PER_SIGNATURE_FEE_LAMPORTS = 5000n
  * `@tetherto/wdk-wallet-solana` does not natively consume that shape. The wallet account
  * is still the source of identity (`getAddress`, `keyPair`).
  */
-export default class LayerswapProtocolSolana extends BridgeProtocol {
+export default class LayerswapProtocolSolana extends SwidgeProtocol {
   /**
+   * Creates a new swidge protocol for chain/token discovery only, without a wallet account.
+   *
+   * @overload
+   * @param {undefined} [account] - No account; only discovery and `fromChain`-scoped quotes work.
+   * @param {LayerswapProtocolConfig} [config] - The layerswap protocol configuration.
+   */
+
+  /**
+   * Creates a new read-only interface to the layerswap protocol for solana blockchains.
+   *
    * @overload
    * @param {WalletAccountReadOnlySolana} account - The wallet account to use to interact with the protocol.
    * @param {LayerswapProtocolConfig} [config] - The layerswap protocol configuration.
    */
 
   /**
+   * Creates a new interface to the layerswap protocol for solana blockchains.
+   *
    * @overload
    * @param {WalletAccountSolana} account - The wallet account to use to interact with the protocol.
    * @param {LayerswapProtocolConfig} [config] - The layerswap protocol configuration.
@@ -152,91 +202,201 @@ export default class LayerswapProtocolSolana extends BridgeProtocol {
   }
 
   /**
-   * Bridges a token to a different blockchain via Layerswap.
+   * Quotes the estimated costs and output of a Layerswap swidge operation without
+   * creating a swap. Layerswap only supports exact-in operations; passing
+   * `toTokenAmount` throws.
    *
-   * Resolves once the source-chain deposit transaction has been broadcast. Layerswap finishes
-   * the destination-chain payout asynchronously; callers can use `getApiClient().getSwap(swapId)`
-   * to track destination delivery.
+   * When the protocol has an account bound, the quote includes a non-included
+   * 'network' fee entry with the estimated source-chain gas (in lamports). Solana
+   * fees are per-signature and bounded; a single-signature transfer is essentially
+   * always 5000 lamports. The actual deposit transaction may contain additional
+   * instructions (e.g. memo, ATA creation) and the gas fee reported by `swidge()`
+   * reflects that — quote-time it is only an approximation.
    *
-   * Semantic note: `bridgeFee` is in **source-token base units**, not native lamports.
-   * See class JSDoc for the rationale.
-   *
-   * @param {BridgeOptions} options - The bridge's options.
-   * @param {Pick<LayerswapProtocolConfig, 'bridgeMaxFee'>} [config] - Per-call overrides.
-   * @returns {Promise<LayerswapBridgeResult>} The bridge's result, augmented with the Layerswap swap id.
+   * @param {LayerswapSwidgeOptions} options - The swidge options.
+   * @returns {Promise<SwidgeQuote>} The quoted swidge details.
    */
-  async bridge (options, config) {
+  async quoteSwidge (options) {
+    const route = await this._resolveSwidgeRoute(options)
+    const fromTokenAmount = this._requireExactIn(options)
+
+    const sourceAddress = this._account
+      ? await this._account.getAddress().catch(() => undefined)
+      : undefined
+
+    const { quote } = await this._client.getQuote({
+      source_network: route.sourceNetwork.name,
+      source_token: route.sourceToken.symbol,
+      destination_network: route.destinationNetwork.name,
+      destination_token: route.destinationToken.symbol,
+      amount: formatBaseUnits(fromTokenAmount, route.sourceToken.decimals),
+      use_deposit_address: false,
+      source_address: sourceAddress,
+      refuel: options.refuel,
+      slippage: formatSlippage(options.slippage)
+    })
+
+    const swidgeQuote = buildSwidgeQuote(quote, route.sourceToken, route.destinationToken, route.sourceNetwork.name)
+
+    // The requested amount is authoritative from the options (exact-in); don't rely on
+    // the API echoing it back.
+    swidgeQuote.fromTokenAmount = fromTokenAmount
+
+    if (sourceAddress !== undefined) {
+      swidgeQuote.fees.push(this._buildGasFee(SOLANA_PER_SIGNATURE_FEE_LAMPORTS, route.sourceNetwork))
+    }
+
+    return swidgeQuote
+  }
+
+  /**
+   * Executes a Layerswap swidge operation: creates the swap, checks the fee guards,
+   * and broadcasts the source-chain deposit transaction.
+   *
+   * Resolves once the deposit has been broadcast. Layerswap finishes the
+   * destination-chain payout asynchronously; track it with `getSwidgeStatus(result.id)`.
+   *
+   * @param {LayerswapSwidgeOptions} options - The swidge options.
+   * @param {SwidgeProtocolConfig & Pick<LayerswapProtocolConfig, 'bridgeMaxFee'>} [config] - Optional
+   *   execution configuration; per-call overrides of the protocol's fee guards.
+   * @returns {Promise<SwidgeResult>} The swidge execution result. `id` is the Layerswap swap
+   *   id (use it with `getSwidgeStatus`); `hash` is the source-chain deposit transaction signature.
+   */
+  async swidge (options, config) {
     if (!this._isWritableAccount(this._account)) {
-      throw new Error("The 'bridge(options)' method requires the protocol to be initialized with a non read-only account.")
+      throw new Error("The 'swidge(options)' method requires the protocol to be initialized with a non read-only account.")
     }
 
     if (!this._connection) {
-      throw new Error('The wallet must be connected to a provider in order to perform bridge operations.')
+      throw new Error('The wallet must be connected to a provider in order to perform swidge operations.')
     }
 
-    const { transaction, bridgeFee, swapId } = await this._buildDepositTransaction(options)
+    const route = await this._resolveSwidgeRoute(options)
+    const fromTokenAmount = this._requireExactIn(options)
+    const merged = { ...this._config, ...config }
 
-    const bridgeMaxFee = config?.bridgeMaxFee ?? this._config.bridgeMaxFee
-    if (bridgeMaxFee !== undefined && bridgeFee >= BigInt(bridgeMaxFee)) {
+    const { swap, transaction, quote } = await this._createSwap(options, route, fromTokenAmount)
+
+    const { fees, toTokenAmount, toTokenAmountMin } = quote
+      ? buildSwidgeQuote(quote, route.sourceToken, route.destinationToken, route.sourceNetwork.name)
+      : { fees: [], toTokenAmount: 0n, toTokenAmountMin: 0n }
+
+    if (options.minAmountOut !== undefined && toTokenAmountMin < BigInt(options.minAmountOut)) {
+      throw new Error('The quoted minimum output is below the requested minAmountOut.')
+    }
+
+    const includedFee = fees.reduce((acc, f) => acc + (f.included ? f.amount : 0n), 0n)
+    if (merged.bridgeMaxFee !== undefined && includedFee >= BigInt(merged.bridgeMaxFee)) {
       throw new Error('Exceeded maximum fee cost for bridge operation.')
     }
 
-    const fee = await this._estimateSignedTransactionFee(transaction)
+    const gas = await this._estimateSignedTransactionFee(transaction)
+    fees.push(this._buildGasFee(gas, route.sourceNetwork))
+
+    assertFeeGuards(fees, fromTokenAmount, route.sourceToken.symbol, merged)
 
     const keypair = this._buildKeypair()
     transaction.sign(keypair)
 
     const hash = await this._connection.sendRawTransaction(transaction.serialize())
 
-    await this._notifyDepositBroadcast(swapId, hash)
+    await this._notifyDepositBroadcast(swap.id, hash)
 
-    return { hash, fee, bridgeFee, swapId }
+    return {
+      id: swap.id,
+      hash,
+      fees,
+      transactions: [{ hash, chain: route.sourceNetwork.name, type: 'source' }],
+      fromTokenAmount,
+      toTokenAmount,
+      toTokenAmountMin
+    }
+  }
+
+  /**
+   * Retrieves the current status of a Layerswap swap, mapped to the WDK swidge
+   * status vocabulary, along with the source/destination/refund transactions
+   * Layerswap has observed so far.
+   *
+   * The Layerswap swap id is globally unique, so the WDK `SwidgeStatusOptions` chain
+   * hints are not needed and are ignored.
+   *
+   * @param {string} id - The Layerswap swap id returned by `swidge()`.
+   * @returns {Promise<SwidgeStatusResult>} The current swidge status.
+   * @throws {Error} If no swap exists with the given id.
+   */
+  async getSwidgeStatus (id) {
+    const response = await this._client.getSwap(id)
+    return buildStatusResult(response)
+  }
+
+  /**
+   * Retrieves the chains supported by Layerswap.
+   *
+   * @returns {Promise<SwidgeSupportedChain[]>} The supported chains. `id` is the Layerswap
+   *   network name (e.g. `'SOLANA_MAINNET'`) — use it as `fromChain`/`toChain`.
+   */
+  async getSupportedChains () {
+    const networks = await this._client.getNetworks()
+    return buildSupportedChains(networks)
+  }
+
+  /**
+   * Retrieves the tokens supported by Layerswap, optionally scoped to a chain.
+   *
+   * @param {SwidgeSupportedTokensOptions} [options] - Chain-scoped filters (`toChain`,
+   *   or `fromChain` when `toChain` is absent). `fromToken` route scoping is not applied.
+   * @returns {Promise<SwidgeSupportedToken[]>} The supported tokens.
+   */
+  async getSupportedTokens (options) {
+    const networks = await this._client.getNetworks()
+    return buildSupportedTokens(networks, options)
+  }
+
+  /**
+   * Bridges a token to a different blockchain via Layerswap.
+   *
+   * Legacy WDK bridge-module surface, kept for backwards compatibility with the
+   * pre-swidge interface of this package: `hash` is the source-chain deposit
+   * transaction signature (not the swap id), and the Layerswap swap id is returned
+   * in the extra `swapId` field.
+   *
+   * Semantic note: `bridgeFee` is in **source-token base units**, not native lamports —
+   * it is the total fee Layerswap deducts from the source amount. `fee` is the
+   * source-chain gas cost in lamports. Do not sum them.
+   *
+   * @param {BridgeOptions} options - The bridge's options.
+   * @param {Pick<LayerswapProtocolConfig, 'bridgeMaxFee'>} [config] - Per-call overrides.
+   * @returns {Promise<LayerswapBridgeResult>} The bridge's result, augmented with the Layerswap swap id.
+   */
+  async bridge (options, config) {
+    const result = await this.swidge(this._toSwidgeOptions(options), config)
+
+    return {
+      hash: result.hash,
+      ...this._splitLegacyFees(result.fees),
+      swapId: result.id
+    }
   }
 
   /**
    * Quotes the costs of a Layerswap bridge operation without creating a swap.
    *
-   * The reported `fee` is an approximation of the source-chain fee — Solana fees are
-   * per-signature and bounded; a single-signature transfer is essentially always
-   * `SOLANA_PER_SIGNATURE_FEE_LAMPORTS` (5000 lamports). The actual deposit transaction
-   * may contain additional instructions (e.g. memo, ATA creation) and the `fee` reported
-   * by `bridge()` reflects that — quote-time it is only an approximation.
-   *
-   * Semantic note: `bridgeFee` is in **source-token base units**, not native lamports.
-   * See class JSDoc for the rationale.
+   * Legacy WDK bridge-module surface, kept for backwards compatibility. `fee` is the
+   * estimated source-chain gas in lamports (quote-time: the per-signature floor);
+   * `bridgeFee` is Layerswap's total fee in source-token base units. See `bridge()`
+   * for the semantics.
    *
    * @param {BridgeOptions} options - The bridge's options.
    * @returns {Promise<Omit<BridgeResult, 'hash'>>} The bridge's quotes.
    */
   async quoteBridge (options) {
-    const { sourceNetwork, sourceToken, destinationNetwork, destinationToken } =
-      await this._resolveRoute(options)
-
-    const amount = BigInt(options.amount)
-    const amountDecimal = formatBaseUnits(amount, sourceToken.decimals)
-
-    const sourceAddress = await this._account.getAddress()
-
-    const { quote } = await this._client.getQuote({
-      source_network: sourceNetwork.name,
-      source_token: sourceToken.symbol,
-      destination_network: destinationNetwork.name,
-      destination_token: destinationToken.symbol,
-      amount: amountDecimal,
-      use_deposit_address: false,
-      source_address: sourceAddress,
-      refuel: options.refuel,
-      slippage: options.slippage
-    })
-
-    const bridgeFee = parseDecimal(quote.total_fee, sourceToken.decimals)
-    const fee = SOLANA_PER_SIGNATURE_FEE_LAMPORTS
-
-    return { fee, bridgeFee }
+    const quote = await this.quoteSwidge(this._toSwidgeOptions(options))
+    return this._splitLegacyFees(quote.fees)
   }
 
   /**
-   * Returns the underlying API client. Useful for polling swap status after `bridge()`.
+   * Returns the underlying API client, for raw access to the Layerswap v2 API.
    *
    * @returns {LayerswapApiClient}
    */
@@ -246,13 +406,13 @@ export default class LayerswapProtocolSolana extends BridgeProtocol {
 
   /**
    * Asks Layerswap for its on-chain assessment of a deposit transaction. Useful as a
-   * follow-up after `bridge()` returns — even if `sendRawTransaction` resolved, the tx
+   * follow-up after `swidge()` returns — even if `sendRawTransaction` resolved, the tx
    * can still revert or be dropped. Returns `'completed' | 'failed' | 'pending'`.
    *
    * The source network defaults to the Solana cluster detected via `getGenesisHash()`;
    * pass `options.sourceChain` to override.
    *
-   * @param {string} signature - The Solana signature returned by `bridge()`.
+   * @param {string} signature - The Solana signature returned by `swidge()`.
    * @param {{ sourceChain?: string }} [options]
    * @returns {Promise<import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapTransactionStatus>}
    */
@@ -262,18 +422,157 @@ export default class LayerswapProtocolSolana extends BridgeProtocol {
   }
 
   /**
+   * Maps the legacy bridge options onto the swidge options vocabulary. The legacy
+   * `slippage` is a percent string ('0.5' = 0.5%); swidge takes a decimal (0.005).
+   *
    * @private
    * @param {BridgeOptions} options
-   * @returns {Promise<{ transaction: Transaction, bridgeFee: bigint, swapId: string }>}
+   * @returns {LayerswapSwidgeOptions}
    */
-  async _buildDepositTransaction (options) {
-    const { sourceNetwork, sourceToken, destinationNetwork, destinationToken } =
-      await this._resolveRoute(options)
+  _toSwidgeOptions (options) {
+    return {
+      fromToken: options.token,
+      toToken: options.destinationToken,
+      toChain: options.targetChain,
+      fromChain: options.sourceChain,
+      recipient: options.recipient,
+      refundAddress: options.refundAddress,
+      fromTokenAmount: options.amount,
+      refuel: options.refuel,
+      referenceId: options.referenceId,
+      ...(options.slippage !== undefined && { slippage: Number(options.slippage) / 100 })
+    }
+  }
 
-    const amount = BigInt(options.amount)
-    const amountDecimal = formatBaseUnits(amount, sourceToken.decimals)
+  /**
+   * Splits a swidge fee breakdown back into the legacy `{ fee, bridgeFee }` pair:
+   * `fee` = non-included fees (source-chain gas, lamports), `bridgeFee` = included
+   * fees (Layerswap's cut, source-token base units).
+   *
+   * @private
+   * @param {SwidgeFee[]} fees
+   * @returns {{ fee: bigint, bridgeFee: bigint }}
+   */
+  _splitLegacyFees (fees) {
+    let fee = 0n
+    let bridgeFee = 0n
+    for (const f of fees) {
+      if (f.included) bridgeFee += f.amount
+      else fee += f.amount
+    }
+    return { fee, bridgeFee }
+  }
+
+  /**
+   * Builds the non-included source-chain gas fee entry.
+   *
+   * @private
+   * @param {bigint} gas
+   * @param {LayerswapNetwork} sourceNetwork
+   * @returns {SwidgeFee}
+   */
+  _buildGasFee (gas, sourceNetwork) {
+    return {
+      type: 'network',
+      amount: gas,
+      token: sourceNetwork.token?.symbol ?? 'SOL',
+      chain: sourceNetwork.name,
+      included: false,
+      description: 'Source-chain gas'
+    }
+  }
+
+  /**
+   * Validates the exact-in/exact-out split. Layerswap quotes are driven by the source
+   * amount, so exact-out operations are rejected.
+   *
+   * @private
+   * @param {LayerswapSwidgeOptions} options
+   * @returns {bigint} The input amount in source-token base units.
+   */
+  _requireExactIn (options) {
+    if (options.toTokenAmount !== undefined) {
+      throw new Error('Layerswap only supports exact-in operations. Use fromTokenAmount instead of toTokenAmount.')
+    }
+    if (options.fromTokenAmount === undefined) {
+      throw new Error("The 'fromTokenAmount' option is required.")
+    }
+    return BigInt(options.fromTokenAmount)
+  }
+
+  /**
+   * Resolves the swidge route (networks and tokens on both sides) from the options.
+   *
+   * @private
+   * @param {LayerswapSwidgeOptions} options
+   * @returns {Promise<{
+   *   sourceNetwork: LayerswapNetwork,
+   *   sourceToken: LayerswapToken,
+   *   destinationNetwork: LayerswapNetwork,
+   *   destinationToken: LayerswapToken
+   * }>}
+   */
+  async _resolveSwidgeRoute (options) {
+    if (options.fromChain === undefined && !this._connection) {
+      throw new Error("The 'fromChain' option is required when the protocol has no connected provider to detect the source chain from.")
+    }
+
+    const sourceName = options.fromChain !== undefined
+      ? String(options.fromChain)
+      : await this._detectSourceNetworkName()
+    const sourceNetwork = await resolveNetworkByName(this._client, sourceName)
+
+    const sourceToken = resolveToken(sourceNetwork, options.fromToken)
+
+    if (options.toChain === undefined) {
+      throw new Error("Layerswap does not support same-chain swaps. The 'toChain' option is required and must differ from the source chain.")
+    }
+
+    const destinationNetwork = await resolveNetworkByName(this._client, String(options.toChain))
+    const destinationToken = resolveToken(destinationNetwork, options.toToken ?? sourceToken.symbol)
+
+    if (sourceNetwork.name === destinationNetwork.name) {
+      throw new Error('The target chain cannot be equal to the source chain.')
+    }
+
+    return { sourceNetwork, sourceToken, destinationNetwork, destinationToken }
+  }
+
+  /**
+   * Resolves the destination recipient. Defaults to the account's own address, but only
+   * when source and destination networks share the same address format (same VM type).
+   *
+   * @private
+   * @param {LayerswapSwidgeOptions} options
+   * @param {LayerswapNetwork} sourceNetwork
+   * @param {LayerswapNetwork} destinationNetwork
+   * @returns {Promise<string>}
+   */
+  async _resolveRecipient (options, sourceNetwork, destinationNetwork) {
+    if (options.recipient !== undefined) return options.recipient
+
+    if (this._account && sourceNetwork.type === destinationNetwork.type) {
+      return this._account.getAddress()
+    }
+
+    throw new Error("The 'recipient' option is required when the destination chain uses a different address format than the source chain.")
+  }
+
+  /**
+   * Creates the Layerswap swap and deserialises the deposit transaction from the returned
+   * wallet-flow deposit action's `call_data`.
+   *
+   * @private
+   * @param {LayerswapSwidgeOptions} options
+   * @param {{ sourceNetwork: LayerswapNetwork, sourceToken: LayerswapToken, destinationNetwork: LayerswapNetwork, destinationToken: LayerswapToken }} route
+   * @param {bigint} fromTokenAmount
+   * @returns {Promise<{ swap: LayerswapSwap, transaction: Transaction, quote: LayerswapQuote | undefined }>}
+   */
+  async _createSwap (options, route, fromTokenAmount) {
+    const { sourceNetwork, sourceToken, destinationNetwork, destinationToken } = route
 
     const sourceAddress = await this._account.getAddress()
+    const recipient = await this._resolveRecipient(options, sourceNetwork, destinationNetwork)
 
     /** @type {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapSwapResponse} */
     const response = await this._client.createSwap({
@@ -281,13 +580,13 @@ export default class LayerswapProtocolSolana extends BridgeProtocol {
       source_token: sourceToken.symbol,
       destination_network: destinationNetwork.name,
       destination_token: destinationToken.symbol,
-      destination_address: options.recipient,
-      amount: amountDecimal,
+      destination_address: recipient,
+      amount: formatBaseUnits(fromTokenAmount, sourceToken.decimals),
       use_deposit_address: false,
       source_address: sourceAddress,
       refund_address: options.refundAddress,
       refuel: options.refuel,
-      slippage: options.slippage,
+      slippage: formatSlippage(options.slippage),
       reference_id: options.referenceId
     })
 
@@ -305,38 +604,7 @@ export default class LayerswapProtocolSolana extends BridgeProtocol {
 
     const transaction = this._decodeDepositTransaction(action.call_data)
 
-    const totalFeeDecimal = response.quote?.quote?.total_fee
-    const bridgeFee = totalFeeDecimal !== undefined && totalFeeDecimal !== null
-      ? parseDecimal(totalFeeDecimal, sourceToken.decimals)
-      : 0n
-
-    return { transaction, bridgeFee, swapId: swap.id }
-  }
-
-  /**
-   * @private
-   * @param {BridgeOptions} options
-   * @returns {Promise<{
-   *   sourceNetwork: LayerswapNetwork,
-   *   sourceToken: LayerswapToken,
-   *   destinationNetwork: LayerswapNetwork,
-   *   destinationToken: LayerswapToken
-   * }>}
-   */
-  async _resolveRoute (options) {
-    const sourceName = options.sourceChain ?? await this._detectSourceNetworkName()
-    const sourceNetwork = await resolveNetworkByName(this._client, sourceName)
-
-    const sourceToken = resolveToken(sourceNetwork, options.token)
-    const destinationNetwork = await resolveNetworkByName(this._client, options.targetChain)
-    const destinationIdentifier = options.destinationToken ?? sourceToken.symbol
-    const destinationToken = resolveToken(destinationNetwork, destinationIdentifier)
-
-    if (sourceNetwork.name === destinationNetwork.name) {
-      throw new Error('The target chain cannot be equal to the source chain.')
-    }
-
-    return { sourceNetwork, sourceToken, destinationNetwork, destinationToken }
+    return { swap, transaction, quote: response.quote?.quote }
   }
 
   /**
@@ -468,7 +736,7 @@ export default class LayerswapProtocolSolana extends BridgeProtocol {
     const genesisHash = await this._connection.getGenesisHash()
     const name = GENESIS_HASH_TO_NETWORK_NAME[genesisHash]
     if (!name) {
-      throw new Error(`Unknown Solana genesis hash '${genesisHash}'. Pass the Layerswap network name explicitly via the 'sourceChain' option.`)
+      throw new Error(`Unknown Solana genesis hash '${genesisHash}'. Pass the Layerswap network name explicitly via the 'fromChain' option (legacy: 'sourceChain').`)
     }
 
     this._sourceNetworkName = name
@@ -478,7 +746,8 @@ export default class LayerswapProtocolSolana extends BridgeProtocol {
   /**
    * Informs Layerswap that the deposit has been broadcast. Best-effort — failures are
    * swallowed because Layerswap's watcher will still detect the on-chain deposit on its
-   * own.
+   * own. Awaited (rather than fire-and-forget) so the API call's lifetime is bounded by
+   * `swidge()`'s return.
    *
    * @private
    * @param {string} swapId

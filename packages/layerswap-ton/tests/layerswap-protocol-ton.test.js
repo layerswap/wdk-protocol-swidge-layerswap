@@ -37,7 +37,18 @@ const ARBITRUM_MAINNET = {
   ]
 }
 
-const NETWORKS = [TON_MAINNET, ARBITRUM_MAINNET]
+// Same-VM destination (type 'ton') used to exercise the recipient-defaulting path.
+const TON_TESTNET = {
+  name: 'TON_TESTNET',
+  chain_id: null,
+  type: 'ton',
+  tokens: [
+    { symbol: 'TON', contract: null, decimals: 9, price_in_usd: 5 },
+    { symbol: 'USDT', contract: tonAddr(0x55), decimals: 6, price_in_usd: 1 }
+  ]
+}
+
+const NETWORKS = [TON_MAINNET, ARBITRUM_MAINNET, TON_TESTNET]
 
 const SENDER_FRIENDLY = tonAddr(0x33)
 // Resolved jetton wallet for the sender — deterministic, checksum-valid address.
@@ -109,24 +120,29 @@ const NETWORKS_HANDLER = {
   body: () => ({ data: NETWORKS })
 }
 
-const QUOTE_HANDLER = {
-  method: 'GET',
-  match: /^\/api\/v2\/quote\?/,
-  status: 200,
-  body: () => ({
-    data: {
-      quote: {
-        requested_amount: 10,
-        receive_amount: 9.5,
-        min_receive_amount: 9.4,
-        total_fee: 0.5,
-        total_fee_in_usd: 0.5,
-        blockchain_fee: 0.45,
-        service_fee: 0.05
+function makeQuoteHandler (overrides = {}) {
+  return {
+    method: 'GET',
+    match: /^\/api\/v2\/quote\?/,
+    status: 200,
+    body: () => ({
+      data: {
+        quote: {
+          requested_amount: 10,
+          receive_amount: 9.5,
+          min_receive_amount: 9.4,
+          total_fee: 0.5,
+          total_fee_in_usd: 0.5,
+          blockchain_fee: 0.45,
+          service_fee: 0.05,
+          ...overrides
+        }
       }
-    }
-  })
+    })
+  }
 }
+
+const QUOTE_HANDLER = makeQuoteHandler()
 
 function makeCreateSwapHandler ({
   totalFee = 0.5,
@@ -597,6 +613,306 @@ describe('LayerswapProtocolTon', () => {
       const p = new LayerswapProtocolTon(account)
       await expect(p.getTransactionStatus('hash-bb', { sourceChain: 'TON_TESTNET' }))
         .resolves.toEqual({ status: 'pending' })
+    })
+  })
+
+  describe('quoteSwidge', () => {
+    test('maps the Layerswap quote to a WDK swidge quote with itemised fees and gas approximation', async () => {
+      global.fetch = buildFetchRouter([NETWORKS_HANDLER, makeQuoteHandler({ avg_completion_time: '00:02:30' })])
+
+      const { account } = makeAccount()
+      const p = new LayerswapProtocolTon(account)
+
+      const quote = await p.quoteSwidge({
+        fromToken: 'USDT',
+        toToken: 'USDT',
+        toChain: 'ARBITRUM_MAINNET',
+        fromTokenAmount: 10_000_000n,
+        slippage: 0.01
+      })
+
+      expect(quote.fromTokenAmount).toBe(10_000_000n)
+      expect(quote.toTokenAmount).toBe(9_500_000n)
+      expect(quote.toTokenAmountMin).toBe(9_400_000n)
+      expect(quote.estimatedDuration).toBe(150)
+      expect(quote.fees).toEqual([
+        expect.objectContaining({ type: 'protocol', amount: 50_000n, token: 'USDT', included: true }),
+        expect.objectContaining({ type: 'network', amount: 450_000n, token: 'USDT', included: true }),
+        // Jetton gas approximation: 0.05 TON = 50_000_000n nanotons.
+        expect.objectContaining({ type: 'network', amount: 50_000_000n, token: 'TON', included: false })
+      ])
+    })
+
+    test('uses the native gas approximation for TON source quotes', async () => {
+      global.fetch = buildFetchRouter([NETWORKS_HANDLER, QUOTE_HANDLER])
+
+      const { account } = makeAccount()
+      const p = new LayerswapProtocolTon(account)
+
+      const quote = await p.quoteSwidge({
+        fromToken: 'TON',
+        toToken: 'ETH',
+        toChain: 'ARBITRUM_MAINNET',
+        fromTokenAmount: 1_000_000_000n
+      })
+
+      const gas = quote.fees.find((f) => !f.included)
+      expect(gas).toEqual(expect.objectContaining({
+        type: 'network',
+        amount: 10_000_000n, // 0.01 TON
+        token: 'TON',
+        chain: 'TON_MAINNET'
+      }))
+    })
+
+    test('omits the gas entry when no account is bound (discovery-mode quote)', async () => {
+      global.fetch = buildFetchRouter([NETWORKS_HANDLER, QUOTE_HANDLER])
+
+      const p = new LayerswapProtocolTon(undefined)
+
+      const quote = await p.quoteSwidge({
+        fromToken: 'USDT',
+        toToken: 'USDT',
+        toChain: 'ARBITRUM_MAINNET',
+        fromTokenAmount: 10_000_000n
+      })
+
+      expect(quote.fees).toHaveLength(2)
+      expect(quote.fees.every((f) => f.included)).toBe(true)
+    })
+
+    test('converts the WDK decimal slippage to a Layerswap percent string', async () => {
+      const fetchMock = buildFetchRouter([NETWORKS_HANDLER, QUOTE_HANDLER])
+      global.fetch = fetchMock
+
+      const { account } = makeAccount()
+      const p = new LayerswapProtocolTon(account)
+
+      await p.quoteSwidge({
+        fromToken: 'USDT',
+        toChain: 'ARBITRUM_MAINNET',
+        fromTokenAmount: 10_000_000n,
+        slippage: 0.005
+      })
+
+      const quoteCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/api/v2/quote'))
+      expect(String(quoteCall[0])).toContain('slippage=0.5')
+    })
+
+    test('rejects exact-out operations', async () => {
+      global.fetch = buildFetchRouter([NETWORKS_HANDLER])
+
+      const { account } = makeAccount()
+      const p = new LayerswapProtocolTon(account)
+
+      await expect(p.quoteSwidge({
+        fromToken: 'USDT',
+        toChain: 'ARBITRUM_MAINNET',
+        toTokenAmount: 10_000_000n
+      })).rejects.toThrow('exact-in')
+    })
+
+    test('rejects same-chain swaps (toChain missing)', async () => {
+      global.fetch = buildFetchRouter([NETWORKS_HANDLER])
+
+      const { account } = makeAccount()
+      const p = new LayerswapProtocolTon(account)
+
+      await expect(p.quoteSwidge({
+        fromToken: 'USDT',
+        toToken: 'TON',
+        fromTokenAmount: 10_000_000n
+      })).rejects.toThrow('same-chain')
+    })
+  })
+
+  describe('swidge', () => {
+    test('creates the swap, sends the jetton deposit, and returns a WDK swidge result', async () => {
+      global.fetch = buildFetchRouter([
+        NETWORKS_HANDLER,
+        makeCreateSwapHandler(),
+        SPEEDUP_HANDLER
+      ])
+
+      const { account, sendTransaction } = makeAccount()
+      const p = new LayerswapProtocolTon(account)
+
+      const result = await p.swidge({
+        fromToken: 'USDT',
+        toToken: 'USDT',
+        toChain: 'ARBITRUM_MAINNET',
+        recipient: '0xa460AEbce0d3A4BecAd8ccf9D6D4861296c503Bd',
+        fromTokenAmount: 10_000_000n
+      })
+
+      expect(result.id).toBe('swap-ton-123')
+      expect(result.hash).toBe('tonhash-deadbeef')
+      expect(result.fromTokenAmount).toBe(10_000_000n)
+      expect(result.toTokenAmount).toBe(9_500_000n)
+      expect(result.toTokenAmountMin).toBe(9_450_000n)
+      expect(result.transactions).toEqual([{ hash: 'tonhash-deadbeef', chain: 'TON_MAINNET', type: 'source' }])
+      expect(result.fees).toEqual([
+        expect.objectContaining({ type: 'protocol', amount: 50_000n, token: 'USDT', included: true }),
+        expect.objectContaining({ type: 'network', amount: 450_000n, token: 'USDT', included: true }),
+        // Actual gas from sendTransaction's return value, in nanotons.
+        expect.objectContaining({ type: 'network', amount: 12_345_000n, token: 'TON', included: false })
+      ])
+
+      const sent = sendTransaction.mock.calls[0][0]
+      expect(sent.to).toBe(Address.parse(SENDER_JETTON_WALLET).toString())
+      expect(sent.value).toBe(toNano('0.045'))
+      expect(sent.body).toBeInstanceOf(Cell)
+    })
+
+    test('defaults the recipient to the account address for same-VM destinations', async () => {
+      const fetchMock = buildFetchRouter([
+        NETWORKS_HANDLER,
+        makeCreateSwapHandler(),
+        SPEEDUP_HANDLER
+      ])
+      global.fetch = fetchMock
+
+      const { account } = makeAccount()
+      const p = new LayerswapProtocolTon(account)
+
+      await p.swidge({
+        fromToken: 'USDT',
+        toChain: 'TON_TESTNET',
+        fromTokenAmount: 10_000_000n
+      })
+
+      const createCall = fetchMock.mock.calls.find(([, init]) => init && init.method === 'POST' && init.body.includes('destination_address'))
+      expect(JSON.parse(createCall[1].body).destination_address).toBe(SENDER_FRIENDLY)
+    })
+
+    test('requires an explicit recipient for cross-VM destinations', async () => {
+      global.fetch = buildFetchRouter([NETWORKS_HANDLER])
+
+      const { account, sendTransaction } = makeAccount()
+      const p = new LayerswapProtocolTon(account)
+
+      await expect(p.swidge({
+        fromToken: 'USDT',
+        toToken: 'USDT',
+        toChain: 'ARBITRUM_MAINNET',
+        fromTokenAmount: 10_000_000n
+      })).rejects.toThrow(/recipient/)
+
+      expect(sendTransaction).not.toHaveBeenCalled()
+    })
+
+    test('enforces maxProtocolFeeBps and does not send', async () => {
+      global.fetch = buildFetchRouter([
+        NETWORKS_HANDLER,
+        makeCreateSwapHandler()
+      ])
+
+      const { account, sendTransaction } = makeAccount()
+      const p = new LayerswapProtocolTon(account)
+
+      // service_fee 0.05 on 10 USDT = 50 bps.
+      await expect(p.swidge({
+        fromToken: 'USDT',
+        toToken: 'USDT',
+        toChain: 'ARBITRUM_MAINNET',
+        recipient: '0xa460AEbce0d3A4BecAd8ccf9D6D4861296c503Bd',
+        fromTokenAmount: 10_000_000n
+      }, { maxProtocolFeeBps: 49 })).rejects.toThrow('maximum protocol fee')
+
+      expect(sendTransaction).not.toHaveBeenCalled()
+    })
+
+    test('throws when the quoted minimum output is below minAmountOut', async () => {
+      global.fetch = buildFetchRouter([
+        NETWORKS_HANDLER,
+        makeCreateSwapHandler()
+      ])
+
+      const { account, sendTransaction } = makeAccount()
+      const p = new LayerswapProtocolTon(account)
+
+      // Create-swap quote min receive is 9.45 USDT = 9_450_000 base units.
+      await expect(p.swidge({
+        fromToken: 'USDT',
+        toToken: 'USDT',
+        toChain: 'ARBITRUM_MAINNET',
+        recipient: '0xa460AEbce0d3A4BecAd8ccf9D6D4861296c503Bd',
+        fromTokenAmount: 10_000_000n,
+        minAmountOut: 9_500_000n
+      })).rejects.toThrow('minAmountOut')
+
+      expect(sendTransaction).not.toHaveBeenCalled()
+    })
+
+    test('throws for read-only accounts', async () => {
+      const { account } = makeAccount({ writable: false })
+      const p = new LayerswapProtocolTon(account)
+
+      await expect(p.swidge({
+        fromToken: 'USDT',
+        toChain: 'ARBITRUM_MAINNET',
+        fromTokenAmount: 10_000_000n
+      })).rejects.toThrow(/non read-only account/)
+    })
+  })
+
+  describe('getSwidgeStatus', () => {
+    test('maps the Layerswap swap status and transactions to the WDK vocabulary', async () => {
+      global.fetch = buildFetchRouter([{
+        method: 'GET',
+        match: /^\/api\/v2\/swaps\/swap-ton-123$/,
+        status: 200,
+        body: () => ({
+          data: {
+            swap: {
+              id: 'swap-ton-123',
+              status: 'ls_transfer_pending',
+              transactions: [
+                { transaction_hash: 'tonhash-input', type: 'input', status: 'completed', network: TON_MAINNET },
+                { transaction_hash: '0xoutput', type: 'output', status: 'initiated', network: ARBITRUM_MAINNET }
+              ]
+            }
+          }
+        })
+      }])
+
+      const { account } = makeAccount()
+      const p = new LayerswapProtocolTon(account)
+
+      await expect(p.getSwidgeStatus('swap-ton-123')).resolves.toEqual({
+        status: 'pending',
+        transactions: [
+          { hash: 'tonhash-input', chain: 'TON_MAINNET', type: 'source' },
+          { hash: '0xoutput', chain: 'ARBITRUM_MAINNET', type: 'destination' }
+        ]
+      })
+    })
+  })
+
+  describe('discovery', () => {
+    test('getSupportedChains maps the network catalog without an account', async () => {
+      global.fetch = buildFetchRouter([NETWORKS_HANDLER])
+
+      const p = new LayerswapProtocolTon(undefined)
+
+      await expect(p.getSupportedChains()).resolves.toEqual([
+        { id: 'TON_MAINNET', name: 'TON_MAINNET', type: 'ton', nativeToken: '' },
+        { id: 'ARBITRUM_MAINNET', name: 'ARBITRUM_MAINNET', type: 'evm', nativeToken: '' },
+        { id: 'TON_TESTNET', name: 'TON_TESTNET', type: 'ton', nativeToken: '' }
+      ])
+    })
+
+    test('getSupportedTokens flattens and scopes by chain', async () => {
+      global.fetch = buildFetchRouter([NETWORKS_HANDLER])
+
+      const p = new LayerswapProtocolTon(undefined)
+
+      const tokens = await p.getSupportedTokens({ toChain: 'TON_MAINNET' })
+      expect(tokens).toHaveLength(2)
+      expect(tokens.every((t) => t.chain === 'TON_MAINNET')).toBe(true)
+
+      const usdt = tokens.find((t) => t.symbol === 'USDT')
+      expect(usdt.address).toBe(TON_JETTON_USDT_MASTER)
     })
   })
 })

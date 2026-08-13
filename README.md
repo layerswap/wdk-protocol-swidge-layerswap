@@ -1,6 +1,8 @@
 # wdk-protocol-bridge-layerswap
 
-Monorepo of [WDK](https://docs.wdk.tether.io/) bridge modules for the [Layerswap](https://layerswap.io/) protocol.
+Monorepo of [WDK](https://docs.wdk.tether.io/) Swidge (swap + bridge) modules for the [Layerswap](https://layerswap.io/) protocol.
+
+Every protocol package extends `SwidgeProtocol` from `@tetherto/wdk-wallet/protocols` and implements the WDK Swidge interface — `quoteSwidge`, `swidge`, `getSwidgeStatus`, `getSupportedChains`, `getSupportedTokens` — which also provides the WDK swap-module (`swap`/`quoteSwap`) and bridge-module (`bridge`/`quoteBridge`) surfaces via the base class.
 
 Each package lets WDK wallet accounts of a specific source-VM family drive a Layerswap swap via the Layerswap public HTTP API (v2):
 
@@ -26,7 +28,20 @@ Each package lets WDK wallet accounts of a specific source-VM family drive a Lay
 | --- | --- |
 | [`@layerswap/wdk-bridge-layerswap-test-app`](./apps/test-app) | CLI for end-to-end smoke tests against a real Layerswap endpoint. Consumes the protocol via `workspace:*`. |
 
-All packages implement `BridgeProtocol` from `@tetherto/wdk-wallet/protocols`. The chain catalog inside each package is dynamic — fetched from `GET /api/v2/networks` and cached per `LayerswapApiClient` instance — so new Layerswap-supported chains within a VM family are picked up without code changes.
+All packages implement `SwidgeProtocol` from `@tetherto/wdk-wallet/protocols` (>= 1.0.0-beta.16). The chain catalog inside each package is dynamic — fetched from `GET /api/v2/networks` and cached per `LayerswapApiClient` instance — so new Layerswap-supported chains within a VM family are picked up without code changes; `getSupportedChains()`/`getSupportedTokens()` expose it in the WDK vocabulary.
+
+```js
+const quote = await protocol.quoteSwidge({
+  fromToken: 'USDC',            // address or Layerswap symbol on the source chain
+  toToken: 'USDC',              // defaults to the source token's symbol
+  toChain: 'ARBITRUM_MAINNET',  // Layerswap network name (see getSupportedChains())
+  fromTokenAmount: 10_000_000n, // exact-in, source-token base units
+  slippage: 0.01                // 1%
+})
+
+const result = await protocol.swidge({ ...route, recipient })
+const status = await protocol.getSwidgeStatus(result.id) // 'action-required' | 'pending' | 'completed' | …
+```
 
 ## Development
 

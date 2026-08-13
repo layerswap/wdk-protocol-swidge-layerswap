@@ -1,6 +1,6 @@
 # @layerswap/wdk-bridge-layerswap-test-app
 
-Workspace CLI for exercising [`@layerswap/wdk-protocol-bridge-layerswap-evm`](../../packages/layerswap-evm) end-to-end against a real Layerswap endpoint. Lives inside the monorepo and consumes the protocol via pnpm's `workspace:*` protocol — so the test app and the protocol share a single copy of every dependency (`instanceof` works across the boundary).
+Workspace CLI for exercising the Layerswap WDK swidge protocol packages (e.g. [`@layerswap/wdk-protocol-bridge-layerswap-evm`](../../packages/layerswap-evm)) end-to-end against a real Layerswap endpoint. Lives inside the monorepo and consumes the protocol via pnpm's `workspace:*` protocol — so the test app and the protocol share a single copy of every dependency (`instanceof` works across the boundary).
 
 ## Install
 
@@ -42,23 +42,31 @@ node --env-file=.env src/cli.mjs networks
 
 Helpful to figure out what to put in `LAYERSWAP_TARGET_CHAIN` and `LAYERSWAP_SOURCE_TOKEN`. Layerswap network names follow the `<CHAIN>_<ENV>` uppercase convention (e.g. `ETHEREUM_MAINNET`, `ARBITRUM_MAINNET`, `ETHEREUM_SEPOLIA`, `ARBITRUM_SEPOLIA`).
 
+### `chains` — list the WDK-mapped chain catalog
+
+```bash
+node --env-file=.env src/cli.mjs chains
+```
+
+The same catalog as `networks`, but in the WDK `SwidgeSupportedChain` shape returned by `protocol.getSupportedChains()`.
+
 ### `quote` — quote a route, no broadcast
 
 ```bash
 node --env-file=.env src/cli.mjs quote
 ```
 
-Builds the wallet account, calls `protocol.quoteBridge(...)`, and prints `{ fee, bridgeFee }`.
+Builds the wallet account, calls `protocol.quoteSwidge(...)`, and prints the receive amounts plus the itemised fee breakdown.
 
-### `bridge` — full E2E
+### `swidge` (alias: `bridge`) — full E2E
 
 ```bash
-node --env-file=.env src/cli.mjs bridge
+node --env-file=.env src/cli.mjs swidge
 ```
 
-1. Quotes the route.
-2. Submits the source-chain deposit transaction.
-3. Polls `GET /api/v2/swaps/<id>` every `LAYERSWAP_POLL_INTERVAL_MS` until the swap reaches a terminal status (`completed`, `failed`, `expired`, `cancelled`, `refunded`) or `LAYERSWAP_POLL_TIMEOUT_MS` elapses.
+1. Quotes the route via `quoteSwidge`.
+2. Executes `swidge` — submits the source-chain deposit transaction.
+3. Polls `protocol.getSwidgeStatus(id)` every `LAYERSWAP_POLL_INTERVAL_MS` until the swap reaches a terminal WDK status (`completed`, `failed`, `expired`, `cancelled`, `refunded`) or `LAYERSWAP_POLL_TIMEOUT_MS` elapses.
 4. On `completed`, prints the destination-chain output tx hash.
 
 ### `status <swapId>` — single-shot poll
@@ -67,7 +75,7 @@ node --env-file=.env src/cli.mjs bridge
 node --env-file=.env src/cli.mjs status 550e8400-e29b-41d4-a716-446655440000
 ```
 
-Fetches and pretty-prints the full `GET /swaps/<id>` envelope. Useful when you want to look up a swap created in a previous `bridge` run.
+Fetches and pretty-prints the full `GET /swaps/<id>` envelope, followed by the WDK-mapped swidge status and transactions. Useful when you want to look up a swap created in a previous `swidge` run.
 
 ## Faucets
 

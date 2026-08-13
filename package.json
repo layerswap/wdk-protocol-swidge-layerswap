@@ -2,7 +2,7 @@
   "name": "@layerswap/wdk-protocol-bridge-layerswap",
   "version": "0.0.0",
   "private": true,
-  "description": "Monorepo of WDK bridge modules for the Layerswap protocol, one package per source-VM family.",
+  "description": "Monorepo of WDK Swidge (swap + bridge) modules for the Layerswap protocol, one package per source-VM family.",
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {

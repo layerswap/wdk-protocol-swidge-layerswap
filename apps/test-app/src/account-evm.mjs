@@ -15,6 +15,10 @@ export async function buildAccount (cfg) {
   }
 
   const wallet = new WalletManagerEvm(cfg.seed, { provider: cfg.sourceRpc })
-  const account = await wallet.getAccount(cfg.derivationPath)
+  // wdk-wallet >= 1.0.0-beta.16: getAccount(indexOrSignerName) no longer takes a
+  // derivation path — path-based derivation moved to getAccountByPath(path).
+  const account = typeof wallet.getAccountByPath === 'function'
+    ? await wallet.getAccountByPath(cfg.derivationPath)
+    : await wallet.getAccount(cfg.derivationPath)
   return account
 }

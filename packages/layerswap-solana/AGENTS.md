@@ -1,6 +1,6 @@
 # Agent Guide — layerswap-solana
 
-Sibling of `layerswap-evm` for the Solana source VM. Implements `BridgeProtocol` for `@tetherto/wdk-wallet-solana` accounts.
+Sibling of `layerswap-evm` for the Solana source VM. Extends `SwidgeProtocol` (from `@tetherto/wdk-wallet/protocols`, >= 1.0.0-beta.16) for `@tetherto/wdk-wallet-solana` accounts, with the legacy `bridge`/`quoteBridge` surface kept as thin adapters over `swidge`.
 
 ## Project Overview
 
@@ -11,7 +11,7 @@ Sibling of `layerswap-evm` for the Solana source VM. Implements `BridgeProtocol`
 
 - `index.js` — public entry: default export of `LayerswapProtocolSolana` plus its config/options/result typedefs.
 - `bare.js` — Bare runtime wrapper.
-- `src/layerswap-protocol-solana.js` — `BridgeProtocol` implementation.
+- `src/layerswap-protocol-solana.js` — `SwidgeProtocol` implementation.
 - `tests/fixtures/` — captured Layerswap API responses + research notes. `RESEARCH-NOTES.md` documents what was verified live vs assumed.
 - `types/` — generated; do not edit by hand.
 
@@ -34,17 +34,16 @@ Layerswap's `chain_id` field is unreliable for Solana (`''` on prod, a numeric s
 | `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG` | `SOLANA_DEVNET` |
 | `4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY` | `SOLANA_TESTNET` |
 
-Users can override the auto-detection by passing `sourceChain: 'SOLANA_<...>'` in the `bridge()` options.
+Users can override the auto-detection by passing `fromChain: 'SOLANA_<...>'` in the `swidge()` options (legacy: `sourceChain` in `bridge()`).
 
 ## Semantic notes (carried over from `layerswap-evm`)
 
-- `BridgeResult.bridgeFee` is in **source-token base units**, not native lamports. Layerswap deducts its fee from the source amount.
-- `LayerswapProtocolConfig.bridgeMaxFee` is compared against `bridgeFee` only.
-- Do not naively sum `fee + bridgeFee` — different units.
+- Swidge fees are itemised: Layerswap's `included: true` entries are in **source-token base units**; the gas entry is non-included and in **lamports**. Never sum across entries with different `token`s.
+- Legacy `BridgeResult.bridgeFee` is in **source-token base units** (= sum of `included` swidge fees). `LayerswapProtocolConfig.bridgeMaxFee` is compared against that sum only.
 
 ## wdk-wallet version pin
 
-`@tetherto/wdk-wallet-solana@1.0.0-beta.8` pins `@tetherto/wdk-wallet@1.0.0-beta.7`. This package also pins `1.0.0-beta.7` so the `BridgeProtocol` base class and the wallet account's superclass come from the same copy. The EVM sibling uses `1.0.0-beta.8`; they coexist because each package is its own subtree.
+All packages pin `@tetherto/wdk-wallet@1.0.0-beta.16` (the version verified to ship `SwidgeProtocol` with the current contract) as the dev dependency, with peer dep `>=1.0.0-beta.16`. The wallet-account packages bundle their own older copy of `@tetherto/wdk-wallet` — that's fine because accounts are consumed duck-typed, never via `instanceof`.
 
 ## Coding conventions
 

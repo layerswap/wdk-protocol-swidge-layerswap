@@ -1,10 +1,12 @@
 {
   "name": "@layerswap/wdk-protocol-bridge-layerswap-bitcoin",
   "version": "1.0.0-beta.1",
-  "description": "WDK module that lets @tetherto/wdk-wallet-btc wallet accounts bridge bitcoin across chains via the Layerswap public API.",
+  "description": "WDK Swidge module that lets @tetherto/wdk-wallet-btc wallet accounts swap and bridge bitcoin across chains via the Layerswap public API, using the ISwidgeProtocol interface.",
   "keywords": [
     "wdk",
     "protocol",
+    "swidge",
+    "swap",
     "bridge",
     "layerswap",
     "bitcoin"
@@ -29,12 +31,12 @@
     "bitcoinjs-lib": "6.1.7"
   },
   "peerDependencies": {
-    "@tetherto/wdk-wallet": ">=1.0.0-beta.7",
+    "@tetherto/wdk-wallet": ">=1.0.0-beta.16",
     "@tetherto/wdk-wallet-btc": ">=1.0.0-beta.9"
   },
   "devDependencies": {
-    "@tetherto/wdk-wallet": "1.0.0-beta.8",
-    "@tetherto/wdk-wallet-btc": "1.0.0-beta.9",
+    "@tetherto/wdk-wallet": "1.0.0-beta.16",
+    "@tetherto/wdk-wallet-btc": "1.0.0-beta.13",
     "cross-env": "10.0.0",
     "jest": "30.0.5",
     "standard": "17.1.2",
