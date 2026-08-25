@@ -1,13 +1,13 @@
-# @layerswap/wdk-bridge-layerswap-test-app
+# @layerswap/wdk-swidge-layerswap-test-app
 
-Workspace CLI for exercising the Layerswap WDK swidge protocol packages (e.g. [`@layerswap/wdk-protocol-bridge-layerswap-evm`](../../packages/layerswap-evm)) end-to-end against a real Layerswap endpoint. Lives inside the monorepo and consumes the protocol via pnpm's `workspace:*` protocol — so the test app and the protocol share a single copy of every dependency (`instanceof` works across the boundary).
+Workspace CLI for exercising the Layerswap WDK swidge protocol packages (e.g. [`@layerswap/wdk-protocol-swidge-layerswap-evm`](../../packages/layerswap-evm)) end-to-end against a real Layerswap endpoint. Lives inside the monorepo and consumes the protocol via pnpm's `workspace:*` protocol — so the test app and the protocol share a single copy of every dependency (`instanceof` works across the boundary).
 
 ## Install
 
 Run from the monorepo root:
 
 ```bash
-cd /Users/arentant/Documents/wdk-protocol-bridge-layerswap
+cd wdk-protocol-swidge-layerswap
 pnpm install
 ```
 
@@ -30,7 +30,7 @@ cd apps/test-app
 node --env-file=.env src/cli.mjs <command>
 ```
 
-(You can also run from the monorepo root via `pnpm --filter @layerswap/wdk-bridge-layerswap-test-app run bridge` etc.)
+(You can also run from the monorepo root via `pnpm --filter @layerswap/wdk-swidge-layerswap-test-app run swidge` etc.)
 
 ## Commands
 

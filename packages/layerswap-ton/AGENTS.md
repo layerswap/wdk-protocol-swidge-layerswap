@@ -4,7 +4,7 @@ Sibling of `layerswap-evm`, `layerswap-solana`, and `layerswap-tron` for the TON
 
 ## Project Overview
 
-- **Architecture:** Single `LayerswapProtocolTon` class. The chain-agnostic HTTP client (`LayerswapApiClient`) and the network/token/decimal helpers live in `@layerswap/wdk-protocol-bridge-layerswap-core` — do not duplicate them here.
+- **Architecture:** Single `LayerswapProtocolTon` class. The chain-agnostic HTTP client (`LayerswapApiClient`) and the network/token/decimal helpers live in `@layerswap/wdk-protocol-swidge-layerswap-core` — do not duplicate them here.
 - **Runtime:** Node.js and Bare. No browser-only globals; HTTP via `fetch`.
 
 ## Key Files

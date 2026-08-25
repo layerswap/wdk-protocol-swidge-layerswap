@@ -27,7 +27,7 @@ import LayerswapApiClient, {
   buildSwidgeQuote,
   formatSlippage,
   assertFeeGuards
-} from '@layerswap/wdk-protocol-bridge-layerswap-core'
+} from '@layerswap/wdk-protocol-swidge-layerswap-core'
 
 /** @typedef {import('@tetherto/wdk-wallet/protocols').SwidgeProtocolConfig} SwidgeProtocolConfig */
 /** @typedef {import('@tetherto/wdk-wallet/protocols').SwidgeOptions} SwidgeOptions */
@@ -43,11 +43,11 @@ import LayerswapApiClient, {
 /** @typedef {import('@tetherto/wdk-wallet-solana').WalletAccountSolana} WalletAccountSolana */
 /** @typedef {import('@tetherto/wdk-wallet-solana').WalletAccountReadOnlySolana} WalletAccountReadOnlySolana */
 
-/** @typedef {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapNetwork} LayerswapNetwork */
-/** @typedef {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapToken} LayerswapToken */
-/** @typedef {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapDepositAction} LayerswapDepositAction */
-/** @typedef {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapSwap} LayerswapSwap */
-/** @typedef {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapQuote} LayerswapQuote */
+/** @typedef {import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapNetwork} LayerswapNetwork */
+/** @typedef {import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapToken} LayerswapToken */
+/** @typedef {import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapDepositAction} LayerswapDepositAction */
+/** @typedef {import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapSwap} LayerswapSwap */
+/** @typedef {import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapQuote} LayerswapQuote */
 
 /**
  * Known Solana cluster genesis hashes → Layerswap network names.
@@ -414,7 +414,7 @@ export default class LayerswapProtocolSolana extends SwidgeProtocol {
    *
    * @param {string} signature - The Solana signature returned by `swidge()`.
    * @param {{ sourceChain?: string }} [options]
-   * @returns {Promise<import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapTransactionStatus>}
+   * @returns {Promise<import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapTransactionStatus>}
    */
   async getTransactionStatus (signature, options = {}) {
     const networkName = options.sourceChain ?? await this._detectSourceNetworkName()
@@ -574,7 +574,7 @@ export default class LayerswapProtocolSolana extends SwidgeProtocol {
     const sourceAddress = await this._account.getAddress()
     const recipient = await this._resolveRecipient(options, sourceNetwork, destinationNetwork)
 
-    /** @type {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapSwapResponse} */
+    /** @type {import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapSwapResponse} */
     const response = await this._client.createSwap({
       source_network: sourceNetwork.name,
       source_token: sourceToken.symbol,

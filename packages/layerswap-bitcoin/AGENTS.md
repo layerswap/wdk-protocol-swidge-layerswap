@@ -4,7 +4,7 @@ Sibling of `layerswap-evm`, `layerswap-solana`, `layerswap-tron`, and `layerswap
 
 ## Project Overview
 
-- **Architecture:** Single `LayerswapProtocolBitcoin` class. The chain-agnostic HTTP client and helpers live in `@layerswap/wdk-protocol-bridge-layerswap-core` — do not duplicate them here.
+- **Architecture:** Single `LayerswapProtocolBitcoin` class. The chain-agnostic HTTP client and helpers live in `@layerswap/wdk-protocol-swidge-layerswap-core` — do not duplicate them here.
 - **Runtime:** Node.js and Bare. No browser-only globals; HTTP via `fetch`.
 
 ## Key Files

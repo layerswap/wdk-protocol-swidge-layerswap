@@ -3,7 +3,7 @@
 This repository is the Layerswap analog of the Tether WDK (Wallet Development Kit) swidge protocol packages — it extends `SwidgeProtocol` from `@tetherto/wdk-wallet/protocols` (>= 1.0.0-beta.16) so a WDK EVM wallet account can swap and bridge tokens across chains via the Layerswap public API. The legacy `bridge`/`quoteBridge` surface is kept as thin adapters over `swidge`/`quoteSwidge`.
 
 ## Project Overview
-- **Architecture:** Single `LayerswapProtocolEvm` class. The chain-agnostic HTTP client (`LayerswapApiClient`) and the network/token/decimal helpers live in the sibling package `@layerswap/wdk-protocol-bridge-layerswap-core` and are imported from there — do not duplicate them here.
+- **Architecture:** Single `LayerswapProtocolEvm` class. The chain-agnostic HTTP client (`LayerswapApiClient`) and the network/token/decimal helpers live in the sibling package `@layerswap/wdk-protocol-swidge-layerswap-core` and are imported from there — do not duplicate them here.
 - **Runtime:** Node.js and Bare. No browser-only globals; HTTP via `fetch`.
 
 ## Tech Stack & Tooling
@@ -35,7 +35,7 @@ This repository is the Layerswap analog of the Tether WDK (Wallet Development Ki
 4. **Build types:** `npm run build:types`
 
 ## Key Files
-- `index.js` — public entry: default export of `LayerswapProtocolEvm` plus its config/options/result typedefs. No `LayerswapApiClient` re-export — consumers import it directly from `@layerswap/wdk-protocol-bridge-layerswap-core`.
+- `index.js` — public entry: default export of `LayerswapProtocolEvm` plus its config/options/result typedefs. No `LayerswapApiClient` re-export — consumers import it directly from `@layerswap/wdk-protocol-swidge-layerswap-core`.
 - `bare.js` — Bare runtime wrapper.
 - `src/layerswap-protocol-evm.js` — `SwidgeProtocol` implementation. Only EVM-specific file in this package; the API client, resolvers, and swidge mapping helpers come from core.
 - `types/` — generated; do not edit by hand.

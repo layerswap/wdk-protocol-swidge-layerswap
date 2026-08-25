@@ -4,12 +4,12 @@
 //
 // Licensed under the Apache License, Version 2.0 (the "License").
 //
-// End-to-end Layerswap bridge against a live testnet. This is NOT a unit test —
+// End-to-end Layerswap swidge against a live testnet. This is NOT a unit test —
 // it broadcasts real (testnet) transactions and waits for Layerswap to deliver
 // on the destination chain.
 //
 // Run:
-//   node tests/integration/bridge-testnet.mjs
+//   node tests/integration/swidge-testnet.mjs
 //
 // Required env vars:
 //   LAYERSWAP_SEED              BIP-39 mnemonic for the source-chain wallet.
@@ -26,7 +26,7 @@
 //   LAYERSWAP_DEST_TOKEN        Default = source token symbol.
 //   LAYERSWAP_RECIPIENT         Default = source wallet address (round-trip).
 //   LAYERSWAP_SOURCE_CHAIN      Override auto-detection (Layerswap network name).
-//   LAYERSWAP_DRY_RUN           If set, only runs quoteBridge — no broadcast.
+//   LAYERSWAP_DRY_RUN           If set, only runs quoteSwidge — no broadcast.
 //   LAYERSWAP_POLL_INTERVAL_MS  Default 10000.
 //   LAYERSWAP_POLL_TIMEOUT_MS   Default 900000 (15 min).
 
@@ -52,6 +52,13 @@ const required = (name) => {
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+const printFees = (fees) => {
+  for (const fee of fees) {
+    const included = fee.included ? 'included' : 'extra'
+    console.log(`    - ${fee.type.padEnd(9)} ${fee.amount.toString().padStart(16)} ${fee.token.padEnd(6)} (${included})`)
+  }
+}
 
 async function main () {
   const seed = required('LAYERSWAP_SEED')
@@ -80,7 +87,7 @@ async function main () {
     process.exit(1)
   }
 
-  console.log('--- Layerswap bridge testnet run ---')
+  console.log('--- Layerswap swidge testnet run ---')
   console.log('API URL          :', apiUrl)
   console.log('API key sent     :', apiKey ? 'yes' : 'no')
   console.log('Source RPC       :', sourceRpc)
@@ -100,32 +107,35 @@ async function main () {
 
   const protocol = new LayerswapProtocolEvm(account, { apiUrl, apiKey })
 
-  const bridgeOptions = {
-    targetChain,
+  const swidgeOptions = {
+    fromToken: sourceToken,
+    toToken: destinationToken,
+    toChain: targetChain,
+    fromChain: sourceChainOverride,
     recipient,
-    token: sourceToken,
-    amount,
-    destinationToken,
-    sourceChain: sourceChainOverride
+    fromTokenAmount: amount
   }
 
-  console.log('\n>> quoteBridge…')
-  const quote = await protocol.quoteBridge(bridgeOptions)
-  console.log('  fee (source-chain gas, wei)        :', quote.fee.toString())
-  console.log('  bridgeFee (source-token base units):', quote.bridgeFee.toString())
+  console.log('\n>> quoteSwidge…')
+  const quote = await protocol.quoteSwidge(swidgeOptions)
+  console.log('  fromTokenAmount :', quote.fromTokenAmount.toString())
+  console.log('  toTokenAmount   :', quote.toTokenAmount.toString())
+  console.log('  toTokenAmountMin:', quote.toTokenAmountMin.toString())
+  console.log('  fees:')
+  printFees(quote.fees)
 
   if (dryRun) {
     console.log('\nDry run — exiting before broadcast.')
     return
   }
 
-  console.log('\n>> bridge…  (broadcasts a real transaction)')
-  const result = await protocol.bridge(bridgeOptions)
-  const swapId = protocol.getLastSwapId()
+  console.log('\n>> swidge…  (broadcasts a real transaction)')
+  const result = await protocol.swidge(swidgeOptions)
+  const swapId = result.id
   console.log('  Source deposit hash:', result.hash)
-  console.log('  Source gas fee     :', result.fee.toString())
-  console.log('  Layerswap fee      :', result.bridgeFee.toString())
   console.log('  Swap id            :', swapId)
+  console.log('  fees:')
+  printFees(result.fees)
 
   if (!swapId) {
     console.error('No swap id available — cannot poll for completion.')
@@ -133,37 +143,32 @@ async function main () {
   }
 
   console.log('\n>> Polling for destination delivery…')
-  const client = protocol.getApiClient()
   const startedAt = Date.now()
   let lastStatus = null
 
   while (Date.now() - startedAt < pollTimeoutMs) {
-    let response
+    let statusResult
     try {
-      response = await client.getSwap(swapId)
+      statusResult = await protocol.getSwidgeStatus(swapId)
     } catch (err) {
       console.warn('  poll error:', err.message)
       await sleep(pollIntervalMs)
       continue
     }
 
-    const swap = response && response.swap
-    const status = swap && swap.status
+    const status = statusResult.status
     if (status !== lastStatus) {
       console.log(`  [${new Date().toISOString()}] status=${status}`)
       lastStatus = status
     }
 
     if (status && TERMINAL_STATUSES.has(status)) {
-      const outputTx = (swap.transactions ?? []).find((t) => t.type === 'output')
+      const outputTx = (statusResult.transactions ?? []).find((t) => t.type === 'destination')
       console.log('\n--- Final state ---')
       console.log('Status            :', status)
       if (status === 'completed' && outputTx) {
-        console.log('Destination tx    :', outputTx.transaction_hash)
-        console.log('Destination amount:', outputTx.amount)
-      }
-      if (status !== 'completed' && swap.fail_reason) {
-        console.log('Fail reason       :', swap.fail_reason)
+        console.log('Destination tx    :', outputTx.hash)
+        console.log('Destination chain :', outputTx.chain ?? '(unknown)')
       }
       return
     }

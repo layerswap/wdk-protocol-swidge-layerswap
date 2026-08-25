@@ -16,11 +16,11 @@
 /** @typedef {import('@tetherto/wdk-wallet-evm-erc-4337').EvmErc4337WalletPaymasterTokenConfig} EvmErc4337WalletPaymasterTokenConfig */
 /** @typedef {import('@tetherto/wdk-wallet-evm-erc-4337').EvmErc4337WalletSponsorshipPolicyConfig} EvmErc4337WalletSponsorshipPolicyConfig */
 /** @typedef {import('@tetherto/wdk-wallet-evm-erc-4337').EvmErc4337WalletNativeCoinsConfig} EvmErc4337WalletNativeCoinsConfig */
-/** @typedef {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapNetwork} LayerswapNetwork */
-/** @typedef {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapToken} LayerswapToken */
-/** @typedef {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapDepositAction} LayerswapDepositAction */
-/** @typedef {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapSwap} LayerswapSwap */
-/** @typedef {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapQuote} LayerswapQuote */
+/** @typedef {import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapNetwork} LayerswapNetwork */
+/** @typedef {import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapToken} LayerswapToken */
+/** @typedef {import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapDepositAction} LayerswapDepositAction */
+/** @typedef {import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapSwap} LayerswapSwap */
+/** @typedef {import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapQuote} LayerswapQuote */
 /**
  * @typedef {SwidgeProtocolConfig & Object} LayerswapProtocolConfig
  * @property {string} [apiKey]                - Optional Layerswap API key. When set, sent as the
@@ -214,11 +214,11 @@ export default class LayerswapProtocolEvm extends SwidgeProtocol {
      *
      * @param {string} txHash - The on-chain transaction hash returned by `swidge()`.
      * @param {{ sourceChain?: string }} [options]
-     * @returns {Promise<import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapTransactionStatus>}
+     * @returns {Promise<import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapTransactionStatus>}
      */
     getTransactionStatus(txHash: string, options?: {
         sourceChain?: string;
-    }): Promise<import("@layerswap/wdk-protocol-bridge-layerswap-core").LayerswapTransactionStatus>;
+    }): Promise<import("@layerswap/wdk-protocol-swidge-layerswap-core").LayerswapTransactionStatus>;
     /**
      * Maps the legacy bridge options onto the swidge options vocabulary. The legacy
      * `slippage` is a percent string ('0.5' = 0.5%); swidge takes a decimal (0.005).
@@ -387,11 +387,11 @@ export type WalletAccountReadOnlyEvmErc4337 = import("@tetherto/wdk-wallet-evm-e
 export type EvmErc4337WalletPaymasterTokenConfig = import("@tetherto/wdk-wallet-evm-erc-4337").EvmErc4337WalletPaymasterTokenConfig;
 export type EvmErc4337WalletSponsorshipPolicyConfig = import("@tetherto/wdk-wallet-evm-erc-4337").EvmErc4337WalletSponsorshipPolicyConfig;
 export type EvmErc4337WalletNativeCoinsConfig = import("@tetherto/wdk-wallet-evm-erc-4337").EvmErc4337WalletNativeCoinsConfig;
-export type LayerswapNetwork = import("@layerswap/wdk-protocol-bridge-layerswap-core").LayerswapNetwork;
-export type LayerswapToken = import("@layerswap/wdk-protocol-bridge-layerswap-core").LayerswapToken;
-export type LayerswapDepositAction = import("@layerswap/wdk-protocol-bridge-layerswap-core").LayerswapDepositAction;
-export type LayerswapSwap = import("@layerswap/wdk-protocol-bridge-layerswap-core").LayerswapSwap;
-export type LayerswapQuote = import("@layerswap/wdk-protocol-bridge-layerswap-core").LayerswapQuote;
+export type LayerswapNetwork = import("@layerswap/wdk-protocol-swidge-layerswap-core").LayerswapNetwork;
+export type LayerswapToken = import("@layerswap/wdk-protocol-swidge-layerswap-core").LayerswapToken;
+export type LayerswapDepositAction = import("@layerswap/wdk-protocol-swidge-layerswap-core").LayerswapDepositAction;
+export type LayerswapSwap = import("@layerswap/wdk-protocol-swidge-layerswap-core").LayerswapSwap;
+export type LayerswapQuote = import("@layerswap/wdk-protocol-swidge-layerswap-core").LayerswapQuote;
 export type LayerswapProtocolConfig = SwidgeProtocolConfig & any;
 /**
  * Layerswap-specific extensions to the WDK swidge options.
@@ -450,4 +450,4 @@ export type LayerswapBridgeResult = BridgeResult & {
     swapId: string;
 };
 import { SwidgeProtocol } from '@tetherto/wdk-wallet/protocols';
-import LayerswapApiClient from '@layerswap/wdk-protocol-bridge-layerswap-core';
+import LayerswapApiClient from '@layerswap/wdk-protocol-swidge-layerswap-core';

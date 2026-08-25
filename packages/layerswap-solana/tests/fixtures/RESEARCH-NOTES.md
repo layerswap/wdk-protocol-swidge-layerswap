@@ -1,6 +1,6 @@
 # Layerswap Solana — research findings (2026-05-22)
 
-Captured while implementing `@layerswap/wdk-protocol-bridge-layerswap-solana`. Carry forward to the next agent.
+Captured while implementing `@layerswap/wdk-protocol-swidge-layerswap-solana`. Carry forward to the next agent.
 
 ## What was verified
 

@@ -1,5 +1,5 @@
 {
-  "name": "@layerswap/wdk-bridge-layerswap-test-app",
+  "name": "@layerswap/wdk-swidge-layerswap-test-app",
   "version": "0.1.0",
   "description": "CLI workspace package for exercising the Layerswap WDK swidge protocol packages end-to-end against a real Layerswap endpoint.",
   "type": "module",
@@ -14,11 +14,11 @@
     "status": "node src/cli.mjs status"
   },
   "dependencies": {
-    "@layerswap/wdk-protocol-bridge-layerswap-core": "workspace:*",
-    "@layerswap/wdk-protocol-bridge-layerswap-evm": "workspace:*",
-    "@layerswap/wdk-protocol-bridge-layerswap-bitcoin": "workspace:*",
-    "@layerswap/wdk-protocol-bridge-layerswap-solana": "workspace:*",
-    "@layerswap/wdk-protocol-bridge-layerswap-ton": "workspace:*",
+    "@layerswap/wdk-protocol-swidge-layerswap-core": "workspace:*",
+    "@layerswap/wdk-protocol-swidge-layerswap-evm": "workspace:*",
+    "@layerswap/wdk-protocol-swidge-layerswap-bitcoin": "workspace:*",
+    "@layerswap/wdk-protocol-swidge-layerswap-solana": "workspace:*",
+    "@layerswap/wdk-protocol-swidge-layerswap-ton": "workspace:*",
     "@tetherto/wdk-wallet": "1.0.0-beta.16",
     "@tetherto/wdk-wallet-btc": "1.0.0-beta.13",
     "@tetherto/wdk-wallet-evm": "1.0.0-beta.16",

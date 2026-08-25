@@ -40,7 +40,7 @@ pnpm test                # jest, all packages
 pnpm run build:types     # tsc, all packages
 ```
 
-Per-package: `pnpm --filter @layerswap/wdk-protocol-bridge-layerswap-evm run <script>` (or the short form `pnpm -F layerswap-evm run <script>`).
+Per-package: `pnpm --filter @layerswap/wdk-protocol-swidge-layerswap-evm run <script>` (or the short form `pnpm -F layerswap-evm run <script>`).
 
 ## Semantic notes (Layerswap-specific)
 

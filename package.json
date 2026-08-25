@@ -1,5 +1,5 @@
 {
-  "name": "@layerswap/wdk-protocol-bridge-layerswap",
+  "name": "@layerswap/wdk-protocol-swidge-layerswap",
   "version": "0.0.0",
   "private": true,
   "description": "Monorepo of WDK Swidge (swap + bridge) modules for the Layerswap protocol, one package per source-VM family.",
@@ -12,10 +12,5 @@
     "test:coverage": "pnpm -r --if-present run test:coverage",
     "build:types": "pnpm -r --if-present run build:types"
   },
-  "packageManager": "pnpm@10.32.1",
-  "pnpm": {
-    "overrides": {
-      "uuid": "^9.0.1"
-    }
-  }
+  "packageManager": "pnpm@10.32.1"
 }

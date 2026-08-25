@@ -1,4 +1,4 @@
-# @layerswap/wdk-protocol-bridge-layerswap-evm
+# @layerswap/wdk-protocol-swidge-layerswap-evm
 
 WDK Swidge module that lets `@tetherto/wdk-wallet-evm` (and `wdk-wallet-evm-erc-4337`) accounts swap and bridge tokens across chains via the Layerswap public API, using the `ISwidgeProtocol` interface from `@tetherto/wdk-wallet/protocols`.
 
@@ -11,13 +11,13 @@ Unlike on-chain bridges, Layerswap is HTTP-orchestrated:
 ## Installation
 
 ```bash
-npm install @layerswap/wdk-protocol-bridge-layerswap-evm
+npm install @layerswap/wdk-protocol-swidge-layerswap-evm
 ```
 
 ## Usage
 
 ```javascript
-import LayerswapProtocolEvm from '@layerswap/wdk-protocol-bridge-layerswap-evm'
+import LayerswapProtocolEvm from '@layerswap/wdk-protocol-swidge-layerswap-evm'
 import WalletManagerEvm from '@tetherto/wdk-wallet-evm'
 
 const wallet = new WalletManagerEvm('your mnemonic...', {

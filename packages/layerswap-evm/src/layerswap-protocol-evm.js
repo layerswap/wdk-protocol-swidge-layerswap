@@ -28,7 +28,7 @@ import LayerswapApiClient, {
   buildSwidgeQuote,
   formatSlippage,
   assertFeeGuards
-} from '@layerswap/wdk-protocol-bridge-layerswap-core'
+} from '@layerswap/wdk-protocol-swidge-layerswap-core'
 
 /** @typedef {import('@tetherto/wdk-wallet/protocols').SwidgeProtocolConfig} SwidgeProtocolConfig */
 /** @typedef {import('@tetherto/wdk-wallet/protocols').SwidgeOptions} SwidgeOptions */
@@ -52,11 +52,11 @@ import LayerswapApiClient, {
 /** @typedef {import('@tetherto/wdk-wallet-evm-erc-4337').EvmErc4337WalletSponsorshipPolicyConfig} EvmErc4337WalletSponsorshipPolicyConfig */
 /** @typedef {import('@tetherto/wdk-wallet-evm-erc-4337').EvmErc4337WalletNativeCoinsConfig} EvmErc4337WalletNativeCoinsConfig */
 
-/** @typedef {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapNetwork} LayerswapNetwork */
-/** @typedef {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapToken} LayerswapToken */
-/** @typedef {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapDepositAction} LayerswapDepositAction */
-/** @typedef {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapSwap} LayerswapSwap */
-/** @typedef {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapQuote} LayerswapQuote */
+/** @typedef {import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapNetwork} LayerswapNetwork */
+/** @typedef {import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapToken} LayerswapToken */
+/** @typedef {import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapDepositAction} LayerswapDepositAction */
+/** @typedef {import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapSwap} LayerswapSwap */
+/** @typedef {import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapQuote} LayerswapQuote */
 
 /**
  * @typedef {SwidgeProtocolConfig & Object} LayerswapProtocolConfig
@@ -403,7 +403,7 @@ export default class LayerswapProtocolEvm extends SwidgeProtocol {
    *
    * @param {string} txHash - The on-chain transaction hash returned by `swidge()`.
    * @param {{ sourceChain?: string }} [options]
-   * @returns {Promise<import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapTransactionStatus>}
+   * @returns {Promise<import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapTransactionStatus>}
    */
   async getTransactionStatus (txHash, options = {}) {
     const networkName = options.sourceChain ?? await this._detectSourceNetworkName()
@@ -562,7 +562,7 @@ export default class LayerswapProtocolEvm extends SwidgeProtocol {
     const sourceAddress = await this._account.getAddress()
     const recipient = await this._resolveRecipient(options, sourceNetwork, destinationNetwork)
 
-    /** @type {import('@layerswap/wdk-protocol-bridge-layerswap-core').LayerswapSwapResponse} */
+    /** @type {import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapSwapResponse} */
     const response = await this._client.createSwap({
       source_network: sourceNetwork.name,
       source_token: sourceToken.symbol,

@@ -1,6 +1,6 @@
-# @layerswap/wdk-protocol-bridge-layerswap-core
+# @layerswap/wdk-protocol-swidge-layerswap-core
 
-Chain-agnostic building blocks for the Layerswap WDK bridge packages. This package is consumed only by sibling `@layerswap/wdk-protocol-bridge-layerswap-<vm>` packages — end users should depend on a VM-specific package (e.g. `@layerswap/wdk-protocol-bridge-layerswap-evm`) instead.
+Chain-agnostic building blocks for the Layerswap WDK Swidge packages. This package is consumed only by sibling `@layerswap/wdk-protocol-swidge-layerswap-<vm>` packages — end users should depend on a VM-specific package (e.g. `@layerswap/wdk-protocol-swidge-layerswap-evm`) instead.
 
 ## What's in here
 

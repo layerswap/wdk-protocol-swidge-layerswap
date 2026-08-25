@@ -1,13 +1,13 @@
-# @layerswap/wdk-protocol-bridge-layerswap-solana
+# @layerswap/wdk-protocol-swidge-layerswap-solana
 
 WDK module that lets `@tetherto/wdk-wallet-solana` accounts swap and bridge tokens across chains via the Layerswap public API. Implements `SwidgeProtocol` from `@tetherto/wdk-wallet/protocols`: `quoteSwidge` / `swidge` / `getSwidgeStatus` / `getSupportedChains` / `getSupportedTokens`.
 
-Sibling of `@layerswap/wdk-protocol-bridge-layerswap-evm`. Shares HTTP/network/decimal plumbing via `@layerswap/wdk-protocol-bridge-layerswap-core`.
+Sibling of `@layerswap/wdk-protocol-swidge-layerswap-evm`. Shares HTTP/network/decimal plumbing via `@layerswap/wdk-protocol-swidge-layerswap-core`.
 
 ## Install
 
 ```bash
-npm install @layerswap/wdk-protocol-bridge-layerswap-solana \
+npm install @layerswap/wdk-protocol-swidge-layerswap-solana \
             @tetherto/wdk-wallet @tetherto/wdk-wallet-solana
 ```
 
@@ -15,7 +15,7 @@ npm install @layerswap/wdk-protocol-bridge-layerswap-solana \
 
 ```js
 import WalletManagerSolana from '@tetherto/wdk-wallet-solana'
-import LayerswapSolana from '@layerswap/wdk-protocol-bridge-layerswap-solana'
+import LayerswapSolana from '@layerswap/wdk-protocol-swidge-layerswap-solana'
 
 const wallet = new WalletManagerSolana({ provider: 'https://api.mainnet-beta.solana.com' })
 const account = await wallet.account('<seed phrase>', "0'/0'/0'")
@@ -82,9 +82,9 @@ const { hash, fee, bridgeFee, swapId } = await protocol.bridge({
 
 ```bash
 pnpm install
-pnpm -F @layerswap/wdk-protocol-bridge-layerswap-solana lint
-pnpm -F @layerswap/wdk-protocol-bridge-layerswap-solana test
-pnpm -F @layerswap/wdk-protocol-bridge-layerswap-solana build:types
+pnpm -F @layerswap/wdk-protocol-swidge-layerswap-solana lint
+pnpm -F @layerswap/wdk-protocol-swidge-layerswap-solana test
+pnpm -F @layerswap/wdk-protocol-swidge-layerswap-solana build:types
 ```
 
 See [`AGENTS.md`](./AGENTS.md) for the per-package agent guide and the repo root [`AGENTS.md`](../../AGENTS.md) for monorepo-wide conventions.

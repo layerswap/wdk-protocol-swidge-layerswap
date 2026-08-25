@@ -1,4 +1,6 @@
-# wdk-protocol-bridge-layerswap
+# wdk-protocol-swidge-layerswap
+
+[![Powered by WDK](./docs/assets/built-with-wdk.svg)](https://docs.wdk.tether.io/)
 
 Monorepo of [WDK](https://docs.wdk.tether.io/) Swidge (swap + bridge) modules for the [Layerswap](https://layerswap.io/) protocol.
 
@@ -16,32 +18,62 @@ Each package lets WDK wallet accounts of a specific source-VM family drive a Lay
 
 | Package | Source VM | Status |
 | --- | --- | --- |
-| [`@layerswap/wdk-protocol-bridge-layerswap-evm`](./packages/layerswap-evm) | EVM | ✅ |
-| [`@layerswap/wdk-protocol-bridge-layerswap-solana`](./packages/layerswap-solana) | Solana | ✅ |
-| [`@layerswap/wdk-protocol-bridge-layerswap-bitcoin`](./packages/layerswap-bitcoin) | Bitcoin (UTXO) | ✅ |
-| [`@layerswap/wdk-protocol-bridge-layerswap-ton`](./packages/layerswap-ton) | TON | ✅ |
-| [`@layerswap/wdk-protocol-bridge-layerswap-tron`](./packages/layerswap-tron) | Tron | soon |
+| [`@layerswap/wdk-protocol-swidge-layerswap-evm`](./packages/layerswap-evm) | EVM | ✅ |
+| [`@layerswap/wdk-protocol-swidge-layerswap-solana`](./packages/layerswap-solana) | Solana | ✅ |
+| [`@layerswap/wdk-protocol-swidge-layerswap-bitcoin`](./packages/layerswap-bitcoin) | Bitcoin (UTXO) | ✅ |
+| [`@layerswap/wdk-protocol-swidge-layerswap-ton`](./packages/layerswap-ton) | TON | ✅ |
 
 ## Apps
 
 | App | Purpose |
 | --- | --- |
-| [`@layerswap/wdk-bridge-layerswap-test-app`](./apps/test-app) | CLI for end-to-end smoke tests against a real Layerswap endpoint. Consumes the protocol via `workspace:*`. |
+| [`@layerswap/wdk-swidge-layerswap-test-app`](./apps/test-app) | CLI for end-to-end smoke tests against a real Layerswap endpoint. Consumes the protocol via `workspace:*`. |
 
 All packages implement `SwidgeProtocol` from `@tetherto/wdk-wallet/protocols` (>= 1.0.0-beta.16). The chain catalog inside each package is dynamic — fetched from `GET /api/v2/networks` and cached per `LayerswapApiClient` instance — so new Layerswap-supported chains within a VM family are picked up without code changes; `getSupportedChains()`/`getSupportedTokens()` expose it in the WDK vocabulary.
 
+## Installation and usage
+
+Install the protocol package that matches the source wallet's VM together with its WDK wallet package. Each implementation guide contains a complete account setup and executable usage example:
+
+- [EVM installation and usage](./packages/layerswap-evm#installation)
+- [Solana installation and usage](./packages/layerswap-solana#install)
+- [Bitcoin installation and usage](./packages/layerswap-bitcoin#install)
+- [TON installation and usage](./packages/layerswap-ton#install)
+
+For example, an EVM source integration starts with:
+
+```bash
+npm install @layerswap/wdk-protocol-swidge-layerswap-evm \
+            @tetherto/wdk-wallet @tetherto/wdk-wallet-evm
+```
+
 ```js
-const quote = await protocol.quoteSwidge({
-  fromToken: 'USDC',            // address or Layerswap symbol on the source chain
-  toToken: 'USDC',              // defaults to the source token's symbol
-  toChain: 'ARBITRUM_MAINNET',  // Layerswap network name (see getSupportedChains())
-  fromTokenAmount: 10_000_000n, // exact-in, source-token base units
-  slippage: 0.01                // 1%
+import WalletManagerEvm from '@tetherto/wdk-wallet-evm'
+import LayerswapProtocolEvm from '@layerswap/wdk-protocol-swidge-layerswap-evm'
+
+const wallet = new WalletManagerEvm(process.env.MNEMONIC, {
+  provider: process.env.ETHEREUM_RPC_URL
+})
+const account = await wallet.getAccount(0)
+const protocol = new LayerswapProtocolEvm(account, {
+  apiKey: process.env.LAYERSWAP_API_KEY // optional
 })
 
-const result = await protocol.swidge({ ...route, recipient })
+const options = {
+  fromToken: 'USDC',
+  toToken: 'USDC',
+  toChain: 'ARBITRUM_MAINNET',
+  recipient: '0x...',
+  fromTokenAmount: 10_000_000n, // 10 USDC in base units
+  slippage: 0.01                // 1%
+}
+
+const quote = await protocol.quoteSwidge(options)
+const result = await protocol.swidge(options)
 const status = await protocol.getSwidgeStatus(result.id) // 'action-required' | 'pending' | 'completed' | …
 ```
+
+Use `getSupportedChains()` and `getSupportedTokens()` to discover live Layerswap route identifiers before quoting. Swidge is exact-in only, and cross-VM routes require an explicit destination `recipient`.
 
 ## Development
 

@@ -1,13 +1,13 @@
-# @layerswap/wdk-protocol-bridge-layerswap-bitcoin
+# @layerswap/wdk-protocol-swidge-layerswap-bitcoin
 
 WDK module that lets `@tetherto/wdk-wallet-btc` accounts swap and bridge bitcoin across chains via the Layerswap public API. Implements `SwidgeProtocol` from `@tetherto/wdk-wallet/protocols` (`quoteSwidge` / `swidge` / `getSwidgeStatus` / `getSupportedChains` / `getSupportedTokens`), which also provides the WDK `swap`/`bridge` module surfaces.
 
-Sibling of `@layerswap/wdk-protocol-bridge-layerswap-evm`, `@layerswap/wdk-protocol-bridge-layerswap-solana`, `@layerswap/wdk-protocol-bridge-layerswap-tron`, and `@layerswap/wdk-protocol-bridge-layerswap-ton`. Shares HTTP/network/decimal plumbing via `@layerswap/wdk-protocol-bridge-layerswap-core`.
+Sibling of `@layerswap/wdk-protocol-swidge-layerswap-evm`, `@layerswap/wdk-protocol-swidge-layerswap-solana`, `@layerswap/wdk-protocol-swidge-layerswap-tron`, and `@layerswap/wdk-protocol-swidge-layerswap-ton`. Shares HTTP/network/decimal plumbing via `@layerswap/wdk-protocol-swidge-layerswap-core`.
 
 ## Install
 
 ```bash
-npm install @layerswap/wdk-protocol-bridge-layerswap-bitcoin \
+npm install @layerswap/wdk-protocol-swidge-layerswap-bitcoin \
             @tetherto/wdk-wallet @tetherto/wdk-wallet-btc
 ```
 
@@ -15,7 +15,7 @@ npm install @layerswap/wdk-protocol-bridge-layerswap-bitcoin \
 
 ```js
 import { WalletAccountBtc } from '@tetherto/wdk-wallet-btc'
-import LayerswapBitcoin from '@layerswap/wdk-protocol-bridge-layerswap-bitcoin'
+import LayerswapBitcoin from '@layerswap/wdk-protocol-swidge-layerswap-bitcoin'
 
 const account = new WalletAccountBtc('<seed phrase>', "0'/0/0", {
   network: 'bitcoin',
@@ -100,9 +100,9 @@ The protocol re-uses several of the wallet account's protected helpers (`_client
 
 ```bash
 pnpm install
-pnpm -F @layerswap/wdk-protocol-bridge-layerswap-bitcoin lint
-pnpm -F @layerswap/wdk-protocol-bridge-layerswap-bitcoin test
-pnpm -F @layerswap/wdk-protocol-bridge-layerswap-bitcoin build:types
+pnpm -F @layerswap/wdk-protocol-swidge-layerswap-bitcoin lint
+pnpm -F @layerswap/wdk-protocol-swidge-layerswap-bitcoin test
+pnpm -F @layerswap/wdk-protocol-swidge-layerswap-bitcoin build:types
 ```
 
 See [`AGENTS.md`](./AGENTS.md) for the per-package agent guide and the repo root [`AGENTS.md`](../../AGENTS.md) for monorepo-wide conventions.

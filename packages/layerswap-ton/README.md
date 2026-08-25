@@ -1,13 +1,13 @@
-# @layerswap/wdk-protocol-bridge-layerswap-ton
+# @layerswap/wdk-protocol-swidge-layerswap-ton
 
 WDK module that lets `@tetherto/wdk-wallet-ton` accounts swap and bridge tokens across chains via the Layerswap public API. Implements `SwidgeProtocol` from `@tetherto/wdk-wallet/protocols` (`quoteSwidge` / `swidge` / `getSwidgeStatus` / `getSupportedChains` / `getSupportedTokens`).
 
-Sibling of `@layerswap/wdk-protocol-bridge-layerswap-evm`, `@layerswap/wdk-protocol-bridge-layerswap-solana` and `@layerswap/wdk-protocol-bridge-layerswap-tron`. Shares HTTP/network/decimal plumbing via `@layerswap/wdk-protocol-bridge-layerswap-core`.
+Sibling of `@layerswap/wdk-protocol-swidge-layerswap-evm`, `@layerswap/wdk-protocol-swidge-layerswap-solana` and `@layerswap/wdk-protocol-swidge-layerswap-tron`. Shares HTTP/network/decimal plumbing via `@layerswap/wdk-protocol-swidge-layerswap-core`.
 
 ## Install
 
 ```bash
-npm install @layerswap/wdk-protocol-bridge-layerswap-ton \
+npm install @layerswap/wdk-protocol-swidge-layerswap-ton \
             @tetherto/wdk-wallet @tetherto/wdk-wallet-ton
 ```
 
@@ -15,7 +15,7 @@ npm install @layerswap/wdk-protocol-bridge-layerswap-ton \
 
 ```js
 import { WalletAccountTon } from '@tetherto/wdk-wallet-ton'
-import LayerswapTon from '@layerswap/wdk-protocol-bridge-layerswap-ton'
+import LayerswapTon from '@layerswap/wdk-protocol-swidge-layerswap-ton'
 
 const account = new WalletAccountTon('<seed phrase>', "0'/0/0", {
   tonClient: { url: 'https://toncenter.com/api/v2/jsonRPC' }
@@ -91,9 +91,9 @@ const { hash, fee, bridgeFee, swapId } = await swidge.bridge({
 
 ```bash
 pnpm install
-pnpm -F @layerswap/wdk-protocol-bridge-layerswap-ton lint
-pnpm -F @layerswap/wdk-protocol-bridge-layerswap-ton test
-pnpm -F @layerswap/wdk-protocol-bridge-layerswap-ton build:types
+pnpm -F @layerswap/wdk-protocol-swidge-layerswap-ton lint
+pnpm -F @layerswap/wdk-protocol-swidge-layerswap-ton test
+pnpm -F @layerswap/wdk-protocol-swidge-layerswap-ton build:types
 ```
 
 See [`AGENTS.md`](./AGENTS.md) for the per-package agent guide and the repo root [`AGENTS.md`](../../AGENTS.md) for monorepo-wide conventions.

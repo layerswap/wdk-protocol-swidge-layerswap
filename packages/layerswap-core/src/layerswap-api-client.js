@@ -265,7 +265,7 @@ export default class LayerswapApiClient {
 
   /**
    * Returns Layerswap's on-chain assessment of a deposit transaction (completed / failed /
-   * pending). Useful as a follow-up to `bridge()` when the source-chain broadcast succeeded
+   * pending). Useful as a follow-up to `swidge()` when the source-chain broadcast succeeded
    * but the tx might still revert or be dropped from the mempool — Layerswap will surface
    * `'failed'` here even before the swap as a whole reaches a terminal status.
    *

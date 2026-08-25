@@ -16,18 +16,18 @@
 //                           WDK-mapped swidge status.
 //
 // VM dispatch:
-//   --vm evm     (default) Uses @layerswap/wdk-protocol-bridge-layerswap-evm with
+//   --vm evm     (default) Uses @layerswap/wdk-protocol-swidge-layerswap-evm with
 //                @tetherto/wdk-wallet-evm.
-//   --vm solana  Uses @layerswap/wdk-protocol-bridge-layerswap-solana with
+//   --vm solana  Uses @layerswap/wdk-protocol-swidge-layerswap-solana with
 //                @tetherto/wdk-wallet-solana. Note: LAYERSWAP_DERIVATION_PATH segments
 //                must all be hardened (e.g. "0'/0'/0'"); the default unhardened EVM
 //                path is rejected by the Solana wallet and is auto-replaced with
 //                "0'/0'/0'".
 //   --vm tron    Not available yet — the tron protocol package has not been implemented.
-//   --vm ton     Uses @layerswap/wdk-protocol-bridge-layerswap-ton with
+//   --vm ton     Uses @layerswap/wdk-protocol-swidge-layerswap-ton with
 //                @tetherto/wdk-wallet-ton. The wallet prepends `m/44'/607'`
 //                internally; LAYERSWAP_SOURCE_RPC should be a TON Center URL.
-//   --vm bitcoin Uses @layerswap/wdk-protocol-bridge-layerswap-bitcoin with
+//   --vm bitcoin Uses @layerswap/wdk-protocol-swidge-layerswap-bitcoin with
 //                @tetherto/wdk-wallet-btc. LAYERSWAP_SOURCE_RPC should be a Blockbook
 //                URL. The wallet's network is derived from LAYERSWAP_SOURCE_CHAIN
 //                (BITCOIN_MAINNET → mainnet, BITCOIN_TESTNET → testnet,
@@ -41,7 +41,7 @@ import {
   LayerswapApiClient,
   buildStatusResult,
   buildSupportedChains
-} from '@layerswap/wdk-protocol-bridge-layerswap-core'
+} from '@layerswap/wdk-protocol-swidge-layerswap-core'
 
 import { loadConfig, required } from './config.mjs'
 
@@ -87,31 +87,31 @@ function parseArgs (argv) {
 async function loadVm (vm) {
   if (vm === 'evm') {
     const [{ default: LayerswapEvm }, accountMod] = await Promise.all([
-      import('@layerswap/wdk-protocol-bridge-layerswap-evm'),
+      import('@layerswap/wdk-protocol-swidge-layerswap-evm'),
       import('./account-evm.mjs')
     ])
     return { Protocol: LayerswapEvm, buildAccount: accountMod.buildAccount }
   }
   if (vm === 'solana') {
     const [{ default: LayerswapSolana }, accountMod] = await Promise.all([
-      import('@layerswap/wdk-protocol-bridge-layerswap-solana'),
+      import('@layerswap/wdk-protocol-swidge-layerswap-solana'),
       import('./account-solana.mjs')
     ])
     return { Protocol: LayerswapSolana, buildAccount: accountMod.buildAccount }
   }
   if (vm === 'tron') {
-    throw new Error("The '@layerswap/wdk-protocol-bridge-layerswap-tron' package has not been implemented yet.")
+    throw new Error("The '@layerswap/wdk-protocol-swidge-layerswap-tron' package has not been implemented yet.")
   }
   if (vm === 'ton') {
     const [{ default: LayerswapTon }, accountMod] = await Promise.all([
-      import('@layerswap/wdk-protocol-bridge-layerswap-ton'),
+      import('@layerswap/wdk-protocol-swidge-layerswap-ton'),
       import('./account-ton.mjs')
     ])
     return { Protocol: LayerswapTon, buildAccount: accountMod.buildAccount }
   }
   if (vm === 'bitcoin') {
     const [{ default: LayerswapBitcoin }, accountMod] = await Promise.all([
-      import('@layerswap/wdk-protocol-bridge-layerswap-bitcoin'),
+      import('@layerswap/wdk-protocol-swidge-layerswap-bitcoin'),
       import('./account-bitcoin.mjs')
     ])
     return { Protocol: LayerswapBitcoin, buildAccount: accountMod.buildAccount }

@@ -4,7 +4,7 @@ Sibling of `layerswap-evm` for the Solana source VM. Extends `SwidgeProtocol` (f
 
 ## Project Overview
 
-- **Architecture:** Single `LayerswapProtocolSolana` class. The chain-agnostic HTTP client (`LayerswapApiClient`) and the network/token/decimal helpers live in `@layerswap/wdk-protocol-bridge-layerswap-core` — do not duplicate them here.
+- **Architecture:** Single `LayerswapProtocolSolana` class. The chain-agnostic HTTP client (`LayerswapApiClient`) and the network/token/decimal helpers live in `@layerswap/wdk-protocol-swidge-layerswap-core` — do not duplicate them here.
 - **Runtime:** Node.js and Bare. No browser-only globals; HTTP via `fetch`.
 
 ## Key Files

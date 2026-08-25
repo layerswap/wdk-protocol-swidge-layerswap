@@ -1,6 +1,6 @@
 # Integration tests
 
-`bridge-testnet.mjs` is a runnable script that drives the full Layerswap flow against a real testnet — it creates a swap, broadcasts the source-chain deposit transaction, and polls Layerswap until the destination payout lands. **This is not a Jest test.** It spends testnet funds.
+`swidge-testnet.mjs` is a runnable script that drives the full Layerswap flow against a real testnet — it creates a swap, broadcasts the source-chain deposit transaction, and polls Layerswap until the destination payout lands. **This is not a Jest test.** It spends testnet funds.
 
 ## Prerequisites
 
@@ -40,7 +40,7 @@ Optional env vars:
 | `LAYERSWAP_DEST_TOKEN` | same symbol as source |
 | `LAYERSWAP_RECIPIENT` | the source wallet's own address (round-trip) |
 | `LAYERSWAP_SOURCE_CHAIN` | auto-detected from RPC chainId |
-| `LAYERSWAP_DRY_RUN` | unset — set to `1` to only run `quoteBridge` |
+| `LAYERSWAP_DRY_RUN` | unset — set to `1` to only run `quoteSwidge` |
 | `LAYERSWAP_POLL_INTERVAL_MS` | `10000` |
 | `LAYERSWAP_POLL_TIMEOUT_MS` | `900000` (15 min) |
 
@@ -55,10 +55,10 @@ LAYERSWAP_SOURCE_RPC="https://eth-sepolia.g.alchemy.com/v2/YOUR_KEY" \
 LAYERSWAP_TARGET_CHAIN="ARBITRUM_SEPOLIA" \
 LAYERSWAP_SOURCE_TOKEN="ETH" \
 LAYERSWAP_AMOUNT="10000000000000000" \
-node tests/integration/bridge-testnet.mjs
+node tests/integration/swidge-testnet.mjs
 ```
 
-**Real bridge:**
+**Real swidge:**
 
 ```bash
 LAYERSWAP_SEED="your mnemonic..." \
@@ -66,15 +66,15 @@ LAYERSWAP_SOURCE_RPC="https://eth-sepolia.g.alchemy.com/v2/YOUR_KEY" \
 LAYERSWAP_TARGET_CHAIN="ARBITRUM_SEPOLIA" \
 LAYERSWAP_SOURCE_TOKEN="ETH" \
 LAYERSWAP_AMOUNT="10000000000000000" \
-node tests/integration/bridge-testnet.mjs
+node tests/integration/swidge-testnet.mjs
 ```
 
 ## What it does
 
 1. Loads the WDK EVM wallet account from the seed + RPC.
-2. Calls `protocol.quoteBridge(...)` and prints `{ fee, bridgeFee }`.
-3. If not dry-run, calls `protocol.bridge(...)` — broadcasts the source-chain deposit and prints the source tx hash + swap id.
-4. Polls `GET /api/v2/swaps/{id}` every `POLL_INTERVAL_MS` until the swap reaches a terminal status (`completed`, `failed`, `expired`, `cancelled`, `refunded`) or `POLL_TIMEOUT_MS` elapses.
+2. Calls `protocol.quoteSwidge(...)` and prints the receive amounts and itemised fees.
+3. If not dry-run, calls `protocol.swidge(...)` — broadcasts the source-chain deposit and prints the source tx hash + swap id.
+4. Polls `protocol.getSwidgeStatus(id)` every `POLL_INTERVAL_MS` until the swap reaches a terminal status (`completed`, `failed`, `expired`, `cancelled`, `refunded`) or `POLL_TIMEOUT_MS` elapses.
 5. On `completed`, prints the destination-chain output tx hash.
 
 ## Discovering the right Layerswap network name
