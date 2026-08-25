@@ -1,10 +1,12 @@
 {
-  "name": "@layerswap/wdk-protocol-bridge-layerswap-core",
+  "name": "@layerswap/wdk-protocol-swidge-layerswap-core",
   "version": "1.0.0-beta.1",
-  "description": "Chain-agnostic Layerswap HTTP client and network/decimal helpers shared by every @layerswap/wdk-protocol-bridge-layerswap-<vm> sibling package.",
+  "description": "Chain-agnostic Layerswap HTTP client and network/decimal helpers shared by every @layerswap/wdk-protocol-swidge-layerswap-<vm> sibling package.",
   "keywords": [
     "wdk",
     "protocol",
+    "swidge",
+    "swap",
     "bridge",
     "layerswap",
     "core"
@@ -25,7 +27,7 @@
   },
   "devDependencies": {
     "cross-env": "10.0.0",
-    "jest": "30.0.5",
+    "jest": "30.4.2",
     "standard": "17.1.2",
     "typescript": "5.8.3"
   },

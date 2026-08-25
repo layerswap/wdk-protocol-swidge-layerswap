@@ -23,6 +23,14 @@
 /** @typedef {import('./src/layerswap-api-client.js').LayerswapGetQuoteParams} LayerswapGetQuoteParams */
 /** @typedef {import('./src/layerswap-api-client.js').LayerswapTransactionStatus} LayerswapTransactionStatus */
 /** @typedef {import('./src/layerswap-api-client.js').LayerswapTransactionStatusValue} LayerswapTransactionStatusValue */
+/** @typedef {import('./src/layerswap-api-client.js').LayerswapSwapStatusValue} LayerswapSwapStatusValue */
+/** @typedef {import('./src/layerswap-api-client.js').LayerswapSwapTransaction} LayerswapSwapTransaction */
+
+/** @typedef {import('./src/swidge.js').LayerswapSwidgeStatus} LayerswapSwidgeStatus */
+/** @typedef {import('./src/swidge.js').LayerswapSwidgeFee} LayerswapSwidgeFee */
+/** @typedef {import('./src/swidge.js').LayerswapSwidgeTransaction} LayerswapSwidgeTransaction */
+/** @typedef {import('./src/swidge.js').LayerswapSwidgeQuote} LayerswapSwidgeQuote */
+/** @typedef {import('./src/swidge.js').LayerswapSwidgeStatusResult} LayerswapSwidgeStatusResult */
 
 export { default } from './src/layerswap-api-client.js'
 
@@ -35,3 +43,17 @@ export {
   formatBaseUnits,
   parseDecimal
 } from './src/networks.js'
+
+export {
+  mapSwapStatus,
+  mapSwapTransactions,
+  deriveSwidgeStatus,
+  buildStatusResult,
+  buildSupportedChains,
+  buildSupportedTokens,
+  buildQuoteFees,
+  buildSwidgeQuote,
+  parseCompletionTime,
+  formatSlippage,
+  assertFeeGuards
+} from './src/swidge.js'

@@ -1,10 +1,12 @@
 {
-  "name": "@layerswap/wdk-protocol-bridge-layerswap-solana",
+  "name": "@layerswap/wdk-protocol-swidge-layerswap-solana",
   "version": "1.0.0-beta.1",
-  "description": "WDK module that lets @tetherto/wdk-wallet-solana wallet accounts bridge tokens across chains via the Layerswap public API.",
+  "description": "WDK Swidge module that lets @tetherto/wdk-wallet-solana wallet accounts swap and bridge tokens across chains via the Layerswap public API, using the ISwidgeProtocol interface.",
   "keywords": [
     "wdk",
     "protocol",
+    "swidge",
+    "swap",
     "bridge",
     "layerswap",
     "solana"
@@ -21,21 +23,22 @@
     "test:coverage": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --coverage"
   },
   "dependencies": {
-    "@layerswap/wdk-protocol-bridge-layerswap-core": "workspace:*",
-    "@solana/web3.js": "1.95.8",
+    "@layerswap/wdk-protocol-swidge-layerswap-core": "workspace:*",
+    "@solana/web3.js": "1.98.4",
     "bare-node-runtime": "^1.1.4"
   },
   "peerDependencies": {
-    "@tetherto/wdk-wallet": ">=1.0.0-beta.7",
+    "@tetherto/wdk-wallet": ">=1.0.0-beta.16",
     "@tetherto/wdk-wallet-solana": ">=1.0.0-beta.5"
   },
   "devDependencies": {
-    "@tetherto/wdk-wallet": "1.0.0-beta.7",
-    "@tetherto/wdk-wallet-solana": "1.0.0-beta.8",
+    "@tetherto/wdk-wallet": "1.0.0-beta.16",
+    "@tetherto/wdk-wallet-solana": "1.0.0-beta.12",
     "cross-env": "10.0.0",
-    "jest": "30.0.5",
+    "jest": "30.4.2",
     "standard": "17.1.2",
-    "typescript": "5.8.3"
+    "typescript": "5.8.3",
+    "ws": "8.21.0"
   },
   "exports": {
     ".": {

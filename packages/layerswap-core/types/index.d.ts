@@ -9,5 +9,13 @@ export type LayerswapCreateSwapParams = import("./src/layerswap-api-client.js").
 export type LayerswapGetQuoteParams = import("./src/layerswap-api-client.js").LayerswapGetQuoteParams;
 export type LayerswapTransactionStatus = import("./src/layerswap-api-client.js").LayerswapTransactionStatus;
 export type LayerswapTransactionStatusValue = import("./src/layerswap-api-client.js").LayerswapTransactionStatusValue;
+export type LayerswapSwapStatusValue = import("./src/layerswap-api-client.js").LayerswapSwapStatusValue;
+export type LayerswapSwapTransaction = import("./src/layerswap-api-client.js").LayerswapSwapTransaction;
+export type LayerswapSwidgeStatus = import("./src/swidge.js").LayerswapSwidgeStatus;
+export type LayerswapSwidgeFee = import("./src/swidge.js").LayerswapSwidgeFee;
+export type LayerswapSwidgeTransaction = import("./src/swidge.js").LayerswapSwidgeTransaction;
+export type LayerswapSwidgeQuote = import("./src/swidge.js").LayerswapSwidgeQuote;
+export type LayerswapSwidgeStatusResult = import("./src/swidge.js").LayerswapSwidgeStatusResult;
 export { default, default as LayerswapApiClient } from "./src/layerswap-api-client.js";
 export { resolveSourceNetwork, resolveNetworkByName, resolveToken, formatBaseUnits, parseDecimal } from "./src/networks.js";
+export { mapSwapStatus, mapSwapTransactions, deriveSwidgeStatus, buildStatusResult, buildSupportedChains, buildSupportedTokens, buildQuoteFees, buildSwidgeQuote, parseCompletionTime, formatSlippage, assertFeeGuards } from "./src/swidge.js";

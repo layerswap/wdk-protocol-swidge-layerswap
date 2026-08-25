@@ -251,7 +251,7 @@ describe('LayerswapProtocolEvm', () => {
     test('uses quoteSendTransaction for native source token', async () => {
       global.fetch = buildFetchRouter([
         NETWORKS_HANDLER,
-        QUOTE_HANDLER({ total_fee: 0.001 })
+        QUOTE_HANDLER({ total_fee: 0.001, service_fee: 0.0006, blockchain_fee: 0.0004 })
       ])
 
       const account = makeAccount()
@@ -511,6 +511,263 @@ describe('LayerswapProtocolEvm', () => {
       const protocol = new LayerswapProtocolEvm(account)
       await expect(protocol.getTransactionStatus('0xbb', { sourceChain: 'arbitrum' }))
         .resolves.toEqual({ status: 'pending' })
+    })
+  })
+
+  describe('quoteSwidge', () => {
+    test('maps the Layerswap quote to a WDK swidge quote with itemised fees and gas', async () => {
+      global.fetch = buildFetchRouter([NETWORKS_HANDLER, QUOTE_HANDLER({ avg_completion_time: '00:02:30' })])
+
+      const account = makeAccount()
+      const protocol = new LayerswapProtocolEvm(account, { apiKey: 'test-key' })
+
+      const quote = await protocol.quoteSwidge({
+        fromToken: 'USDC',
+        toToken: 'USDC',
+        toChain: 'arbitrum',
+        fromTokenAmount: 100_000_000n,
+        slippage: 0.01
+      })
+
+      expect(quote.fromTokenAmount).toBe(100_000_000n)
+      expect(quote.toTokenAmount).toBe(99_500_000n)
+      expect(quote.toTokenAmountMin).toBe(99_000_000n)
+      expect(quote.estimatedDuration).toBe(150)
+      expect(quote.fees).toEqual([
+        expect.objectContaining({ type: 'protocol', amount: 400_000n, token: 'USDC', included: true }),
+        expect.objectContaining({ type: 'network', amount: 100_000n, token: 'USDC', included: true }),
+        expect.objectContaining({ type: 'network', amount: 67_890n, token: 'ETH', included: false })
+      ])
+    })
+
+    test('omits the gas fee entry when estimation fails (e.g. unfunded account)', async () => {
+      global.fetch = buildFetchRouter([NETWORKS_HANDLER, QUOTE_HANDLER()])
+
+      const account = makeAccount()
+      account.quoteSendTransaction.mockRejectedValue(new Error('missing revert data'))
+      const protocol = new LayerswapProtocolEvm(account)
+
+      const quote = await protocol.quoteSwidge({
+        fromToken: 'ETH',
+        toChain: 'arbitrum',
+        fromTokenAmount: 1_000_000_000_000_000n
+      })
+
+      expect(quote.fees.every((f) => f.included)).toBe(true)
+    })
+
+    test('converts the WDK decimal slippage to a Layerswap percent string', async () => {
+      const fetchMock = buildFetchRouter([NETWORKS_HANDLER, QUOTE_HANDLER()])
+      global.fetch = fetchMock
+
+      const account = makeAccount()
+      const protocol = new LayerswapProtocolEvm(account)
+
+      await protocol.quoteSwidge({
+        fromToken: 'USDC',
+        toChain: 'arbitrum',
+        fromTokenAmount: 100_000_000n,
+        slippage: 0.005
+      })
+
+      const quoteCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/api/v2/quote'))
+      expect(String(quoteCall[0])).toContain('slippage=0.5')
+    })
+
+    test('rejects exact-out operations', async () => {
+      global.fetch = buildFetchRouter([NETWORKS_HANDLER])
+
+      const account = makeAccount()
+      const protocol = new LayerswapProtocolEvm(account)
+
+      await expect(protocol.quoteSwidge({
+        fromToken: 'USDC',
+        toChain: 'arbitrum',
+        toTokenAmount: 100_000_000n
+      })).rejects.toThrow('exact-in')
+    })
+
+    test('rejects same-chain swaps (toChain missing)', async () => {
+      global.fetch = buildFetchRouter([NETWORKS_HANDLER])
+
+      const account = makeAccount()
+      const protocol = new LayerswapProtocolEvm(account)
+
+      await expect(protocol.quoteSwidge({
+        fromToken: 'USDC',
+        toToken: 'ETH',
+        fromTokenAmount: 100_000_000n
+      })).rejects.toThrow('same-chain')
+    })
+  })
+
+  describe('swidge', () => {
+    test('creates the swap, sends the deposit, and returns a WDK swidge result', async () => {
+      global.fetch = buildFetchRouter([
+        NETWORKS_HANDLER,
+        CREATE_SWAP_HANDLER({}),
+        SPEEDUP_HANDLER('swap-id-1')
+      ])
+
+      const account = makeAccount()
+      const protocol = new LayerswapProtocolEvm(account, { apiKey: 'test-key' })
+
+      const result = await protocol.swidge({
+        fromToken: USDC_CONTRACT,
+        toToken: 'USDC',
+        toChain: 'arbitrum',
+        recipient: USER_ADDRESS,
+        fromTokenAmount: 100_000_000n
+      })
+
+      expect(result.id).toBe('swap-id-1')
+      expect(result.hash).toBe('dummy-hash')
+      expect(result.fromTokenAmount).toBe(100_000_000n)
+      expect(result.transactions).toEqual([{ hash: 'dummy-hash', chain: 'ethereum', type: 'source' }])
+      expect(result.fees).toEqual([
+        expect.objectContaining({ type: 'protocol', amount: 500_000n, token: 'USDC', included: true }),
+        expect.objectContaining({ type: 'network', amount: 12_345n, token: 'ETH', included: false })
+      ])
+      expect(account.sendTransaction).toHaveBeenCalledWith({
+        to: DEPOSIT_ADDRESS,
+        value: 0n,
+        data: ERC20_CALLDATA
+      })
+    })
+
+    test('defaults the recipient to the account address for same-VM destinations', async () => {
+      const fetchMock = buildFetchRouter([
+        NETWORKS_HANDLER,
+        CREATE_SWAP_HANDLER({}),
+        SPEEDUP_HANDLER('swap-id-1')
+      ])
+      global.fetch = fetchMock
+
+      const account = makeAccount()
+      const protocol = new LayerswapProtocolEvm(account)
+
+      await protocol.swidge({
+        fromToken: 'USDC',
+        toChain: 'arbitrum',
+        fromTokenAmount: 100_000_000n
+      })
+
+      const createCall = fetchMock.mock.calls.find(([, init]) => init && init.method === 'POST' && init.body.includes('destination_address'))
+      expect(JSON.parse(createCall[1].body).destination_address).toBe(USER_ADDRESS)
+    })
+
+    test('enforces maxProtocolFeeBps and does not send', async () => {
+      global.fetch = buildFetchRouter([
+        NETWORKS_HANDLER,
+        CREATE_SWAP_HANDLER({})
+      ])
+
+      const account = makeAccount()
+      const protocol = new LayerswapProtocolEvm(account)
+
+      // total_fee 0.5 on 100 USDC = 50 bps
+      await expect(protocol.swidge({
+        fromToken: 'USDC',
+        toToken: 'USDC',
+        toChain: 'arbitrum',
+        recipient: USER_ADDRESS,
+        fromTokenAmount: 100_000_000n
+      }, { maxProtocolFeeBps: 49 })).rejects.toThrow('maximum protocol fee')
+
+      expect(account.sendTransaction).not.toHaveBeenCalled()
+    })
+
+    test('throws when the quoted minimum output is below minAmountOut', async () => {
+      global.fetch = buildFetchRouter([
+        NETWORKS_HANDLER,
+        CREATE_SWAP_HANDLER({})
+      ])
+
+      const account = makeAccount()
+      const protocol = new LayerswapProtocolEvm(account)
+
+      await expect(protocol.swidge({
+        fromToken: 'USDC',
+        toToken: 'USDC',
+        toChain: 'arbitrum',
+        recipient: USER_ADDRESS,
+        fromTokenAmount: 100_000_000n,
+        minAmountOut: 99_000_000n
+      })).rejects.toThrow('minAmountOut')
+
+      expect(account.sendTransaction).not.toHaveBeenCalled()
+    })
+
+    test('throws for read-only accounts', async () => {
+      // A plain object (no WalletAccountEvm/Erc4337 prototype) represents the read-only
+      // case from the protocol's perspective — the writable duck-type gate rejects it.
+      const account = {
+        _config: { provider: 'https://rpc.example/eth' },
+        getAddress: jest.fn().mockResolvedValue(USER_ADDRESS)
+      }
+      const protocol = new LayerswapProtocolEvm(account)
+
+      await expect(protocol.swidge({
+        fromToken: 'USDC',
+        toChain: 'arbitrum',
+        fromTokenAmount: 100_000_000n
+      })).rejects.toThrow('non read-only account')
+    })
+  })
+
+  describe('getSwidgeStatus', () => {
+    test('maps the Layerswap swap status and transactions to the WDK vocabulary', async () => {
+      global.fetch = buildFetchRouter([{
+        method: 'GET',
+        match: /^\/api\/v2\/swaps\/swap-id-1$/,
+        status: 200,
+        body: () => ({
+          data: {
+            swap: {
+              id: 'swap-id-1',
+              status: 'ls_transfer_pending',
+              transactions: [
+                { transaction_hash: '0xinput', type: 'input', status: 'completed', network: ETHEREUM_NETWORK },
+                { transaction_hash: '0xoutput', type: 'output', status: 'initiated', network: ARBITRUM_NETWORK }
+              ]
+            }
+          }
+        })
+      }])
+
+      const account = makeAccount()
+      const protocol = new LayerswapProtocolEvm(account)
+
+      await expect(protocol.getSwidgeStatus('swap-id-1')).resolves.toEqual({
+        status: 'pending',
+        transactions: [
+          { hash: '0xinput', chain: 'ethereum', type: 'source' },
+          { hash: '0xoutput', chain: 'arbitrum', type: 'destination' }
+        ]
+      })
+    })
+  })
+
+  describe('discovery', () => {
+    test('getSupportedChains maps the network catalog', async () => {
+      global.fetch = buildFetchRouter([NETWORKS_HANDLER])
+
+      const protocol = new LayerswapProtocolEvm(undefined)
+
+      await expect(protocol.getSupportedChains()).resolves.toEqual([
+        { id: 'ethereum', name: 'ethereum', type: 'evm', nativeToken: '' },
+        { id: 'arbitrum', name: 'arbitrum', type: 'evm', nativeToken: '' }
+      ])
+    })
+
+    test('getSupportedTokens flattens and scopes by chain', async () => {
+      global.fetch = buildFetchRouter([NETWORKS_HANDLER])
+
+      const protocol = new LayerswapProtocolEvm(undefined)
+
+      const tokens = await protocol.getSupportedTokens({ toChain: 'arbitrum' })
+      expect(tokens).toHaveLength(2)
+      expect(tokens.every((t) => t.chain === 'arbitrum')).toBe(true)
     })
   })
 })

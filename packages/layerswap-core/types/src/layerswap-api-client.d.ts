@@ -4,6 +4,7 @@
  * @property {string | null} contract
  * @property {number} decimals
  * @property {number} [price_in_usd]
+ * @property {string} [display_asset]
  */
 /**
  * @typedef {Object} LayerswapNetwork
@@ -11,6 +12,8 @@
  * @property {string | null} chain_id
  * @property {string} type
  * @property {LayerswapToken[]} tokens
+ * @property {string} [display_name]
+ * @property {LayerswapToken} [token] - The network's native gas token.
  */
 /**
  * @typedef {Object} LayerswapQuote
@@ -37,16 +40,45 @@
  * @property {'transfer' | 'manual_transfer'} type
  */
 /**
+ * @typedef {'user_transfer_pending' | 'ls_transfer_pending' | 'completed' | 'failed'
+ *          | 'expired' | 'cancelled' | 'pending_refund' | 'refunded'} LayerswapSwapStatusValue
+ *
+ * Layerswap's swap lifecycle statuses, as serialized on the wire by the v2 API:
+ * - `user_transfer_pending`: waiting for the user's deposit on the source network.
+ * - `ls_transfer_pending`: deposit detected; Layerswap is executing the destination payout.
+ * - `completed`: funds delivered to the destination address.
+ * - `pending_refund` / `refunded`: the swap could not complete and funds are being / have been returned.
+ */
+/**
+ * A source/destination/refuel/refund transaction attached to a swap by Layerswap.
+ *
+ * @typedef {Object} LayerswapSwapTransaction
+ * @property {string} transaction_hash
+ * @property {'input' | 'output' | 'refuel' | 'refund'} type
+ * @property {'completed' | 'initiated' | 'pending'} status
+ * @property {number} [amount]
+ * @property {string} [from]
+ * @property {string} [to]
+ * @property {string} [timestamp]
+ * @property {number} [confirmations]
+ * @property {number} [max_confirmations]
+ * @property {LayerswapToken} [token]
+ * @property {LayerswapNetwork | string} [network]
+ */
+/**
  * @typedef {Object} LayerswapSwap
  * @property {string} id
  * @property {string} created_date
- * @property {string} status
+ * @property {LayerswapSwapStatusValue | string} status
  * @property {LayerswapNetwork} source_network
  * @property {LayerswapToken} source_token
  * @property {LayerswapNetwork} destination_network
  * @property {LayerswapToken} destination_token
  * @property {string} destination_address
  * @property {number} requested_amount
+ * @property {string} [source_address]
+ * @property {string | null} [fail_reason]
+ * @property {LayerswapSwapTransaction[]} [transactions]
  */
 /**
  * @typedef {Object} LayerswapSwapResponse
@@ -162,7 +194,7 @@ export default class LayerswapApiClient {
     getSwap(swapId: string): Promise<LayerswapSwapResponse>;
     /**
      * Returns Layerswap's on-chain assessment of a deposit transaction (completed / failed /
-     * pending). Useful as a follow-up to `bridge()` when the source-chain broadcast succeeded
+     * pending). Useful as a follow-up to `swidge()` when the source-chain broadcast succeeded
      * but the tx might still revert or be dropped from the mempool — Layerswap will surface
      * `'failed'` here even before the swap as a whole reaches a terminal status.
      *
@@ -211,12 +243,18 @@ export type LayerswapToken = {
     contract: string | null;
     decimals: number;
     price_in_usd?: number;
+    display_asset?: string;
 };
 export type LayerswapNetwork = {
     name: string;
     chain_id: string | null;
     type: string;
     tokens: LayerswapToken[];
+    display_name?: string;
+    /**
+     * - The network's native gas token.
+     */
+    token?: LayerswapToken;
 };
 export type LayerswapQuote = {
     requested_amount: number;
@@ -240,16 +278,43 @@ export type LayerswapDepositAction = {
     order: number;
     type: "transfer" | "manual_transfer";
 };
+/**
+ * Layerswap's swap lifecycle statuses, as serialized on the wire by the v2 API:
+ * - `user_transfer_pending`: waiting for the user's deposit on the source network.
+ * - `ls_transfer_pending`: deposit detected; Layerswap is executing the destination payout.
+ * - `completed`: funds delivered to the destination address.
+ * - `pending_refund` / `refunded`: the swap could not complete and funds are being / have been returned.
+ */
+export type LayerswapSwapStatusValue = "user_transfer_pending" | "ls_transfer_pending" | "completed" | "failed" | "expired" | "cancelled" | "pending_refund" | "refunded";
+/**
+ * A source/destination/refuel/refund transaction attached to a swap by Layerswap.
+ */
+export type LayerswapSwapTransaction = {
+    transaction_hash: string;
+    type: "input" | "output" | "refuel" | "refund";
+    status: "completed" | "initiated" | "pending";
+    amount?: number;
+    from?: string;
+    to?: string;
+    timestamp?: string;
+    confirmations?: number;
+    max_confirmations?: number;
+    token?: LayerswapToken;
+    network?: LayerswapNetwork | string;
+};
 export type LayerswapSwap = {
     id: string;
     created_date: string;
-    status: string;
+    status: LayerswapSwapStatusValue | string;
     source_network: LayerswapNetwork;
     source_token: LayerswapToken;
     destination_network: LayerswapNetwork;
     destination_token: LayerswapToken;
     destination_address: string;
     requested_amount: number;
+    source_address?: string;
+    fail_reason?: string | null;
+    transactions?: LayerswapSwapTransaction[];
 };
 export type LayerswapSwapResponse = {
     swap: LayerswapSwap;

@@ -32,7 +32,18 @@ const ARBITRUM_MAINNET = {
   ]
 }
 
-const NETWORKS = [SOLANA_MAINNET, ARBITRUM_MAINNET]
+// A second Solana-VM network so the same-address-format recipient defaulting is testable.
+const SOLANA_DEVNET = {
+  name: 'SOLANA_DEVNET',
+  chain_id: '103',
+  type: 'solana',
+  tokens: [
+    { symbol: 'SOL', contract: null, decimals: 9, price_in_usd: 87 },
+    { symbol: 'USDC', contract: 'Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr', decimals: 6, price_in_usd: 1 }
+  ]
+}
+
+const NETWORKS = [SOLANA_MAINNET, ARBITRUM_MAINNET, SOLANA_DEVNET]
 
 const SOLANA_MAINNET_GENESIS_HASH = '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d'
 const DEVNET_GENESIS_HASH = 'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG'
@@ -87,6 +98,9 @@ function buildFetchRouter (handlers) {
 /**
  * Builds a mock account that passes `instanceof WalletAccountSolana` via prototype.
  * The protocol reads `getAddress()`, `keyPair`, and `_config.provider`.
+ *
+ * Read-only accounts are represented as plain objects WITHOUT the WalletAccountSolana
+ * prototype (a prototype-carrying mock would inherit writable-account methods).
  */
 function makeAccount ({ writable = true, keypair = Keypair.generate(), provider = 'https://api.fake.solana.local' } = {}) {
   const address = keypair.publicKey.toBase58()
@@ -137,7 +151,7 @@ const NETWORKS_HANDLER = {
   body: () => ({ data: NETWORKS })
 }
 
-const QUOTE_HANDLER = {
+const QUOTE_HANDLER = (overrides = {}) => ({
   method: 'GET',
   match: /^\/api\/v2\/quote\?/,
   status: 200,
@@ -150,11 +164,12 @@ const QUOTE_HANDLER = {
         total_fee: 0.5,
         total_fee_in_usd: 0.5,
         blockchain_fee: 0.45,
-        service_fee: 0.05
+        service_fee: 0.05,
+        ...overrides
       }
     }
   })
-}
+})
 
 function makeCreateSwapHandler ({ sourceAddress, totalFee = 0.5 }) {
   return {
@@ -233,6 +248,11 @@ describe('LayerswapProtocolSolana', () => {
       })
       expect(p._config.bridgeMaxFee).toBe(1_000_000n)
     })
+
+    test('tolerates being constructed without an account (discovery-only)', () => {
+      const p = new LayerswapProtocolSolana(undefined)
+      expect(p.getApiClient()).toBeDefined()
+    })
   })
 
   describe('source network detection', () => {
@@ -269,7 +289,7 @@ describe('LayerswapProtocolSolana', () => {
 
   describe('quoteBridge', () => {
     test('returns bridgeFee in source-token base units and per-signature fee', async () => {
-      global.fetch = buildFetchRouter([NETWORKS_HANDLER, QUOTE_HANDLER])
+      global.fetch = buildFetchRouter([NETWORKS_HANDLER, QUOTE_HANDLER()])
 
       const { account } = makeAccount()
       const p = new LayerswapProtocolSolana(account)
@@ -308,7 +328,7 @@ describe('LayerswapProtocolSolana', () => {
     })
 
     test('respects sourceChain override (skips genesis-hash detection)', async () => {
-      global.fetch = buildFetchRouter([NETWORKS_HANDLER, QUOTE_HANDLER])
+      global.fetch = buildFetchRouter([NETWORKS_HANDLER, QUOTE_HANDLER()])
 
       const { account } = makeAccount()
       const p = new LayerswapProtocolSolana(account)
@@ -394,7 +414,7 @@ describe('LayerswapProtocolSolana', () => {
       }, { bridgeMaxFee: 1n })).rejects.toThrow(/Exceeded maximum fee/)
     })
 
-    test('throws when account is read-only (instanceof check fails)', async () => {
+    test('throws when account is read-only (writable duck-type check fails)', async () => {
       const { account } = makeAccount({ writable: false })
       const p = new LayerswapProtocolSolana(account)
       stubConnection(p)
@@ -408,7 +428,7 @@ describe('LayerswapProtocolSolana', () => {
     })
 
     test('throws when call_data is missing or empty', async () => {
-      const { account, address } = makeAccount()
+      const { account } = makeAccount()
       global.fetch = buildFetchRouter([
         NETWORKS_HANDLER,
         {
@@ -447,7 +467,7 @@ describe('LayerswapProtocolSolana', () => {
     })
 
     test('throws when only non-wallet deposit actions are returned', async () => {
-      const { account, address } = makeAccount()
+      const { account } = makeAccount()
       global.fetch = buildFetchRouter([
         NETWORKS_HANDLER,
         {
@@ -573,6 +593,290 @@ describe('LayerswapProtocolSolana', () => {
       await expect(p.getTransactionStatus('sig-bb', { sourceChain: 'SOLANA_DEVNET' }))
         .resolves.toEqual({ status: 'pending' })
       expect(conn.getGenesisHash).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('quoteSwidge', () => {
+    test('maps the Layerswap quote to a WDK swidge quote with itemised fees and gas', async () => {
+      global.fetch = buildFetchRouter([NETWORKS_HANDLER, QUOTE_HANDLER({ avg_completion_time: '00:02:30' })])
+
+      const { account } = makeAccount()
+      const p = new LayerswapProtocolSolana(account)
+      stubConnection(p)
+
+      const quote = await p.quoteSwidge({
+        fromToken: 'USDC',
+        toToken: 'USDC',
+        toChain: 'ARBITRUM_MAINNET',
+        fromTokenAmount: 10_000_000n,
+        slippage: 0.01
+      })
+
+      expect(quote.fromTokenAmount).toBe(10_000_000n)
+      expect(quote.toTokenAmount).toBe(9_500_000n)
+      expect(quote.toTokenAmountMin).toBe(9_400_000n)
+      expect(quote.estimatedDuration).toBe(150)
+      expect(quote.fees).toEqual([
+        expect.objectContaining({ type: 'protocol', amount: 50_000n, token: 'USDC', included: true }),
+        expect.objectContaining({ type: 'network', amount: 450_000n, token: 'USDC', included: true }),
+        expect.objectContaining({ type: 'network', amount: 5000n, token: 'SOL', included: false })
+      ])
+    })
+
+    test('converts the WDK decimal slippage to a Layerswap percent string', async () => {
+      const fetchMock = buildFetchRouter([NETWORKS_HANDLER, QUOTE_HANDLER()])
+      global.fetch = fetchMock
+
+      const { account } = makeAccount()
+      const p = new LayerswapProtocolSolana(account)
+      stubConnection(p)
+
+      await p.quoteSwidge({
+        fromToken: 'USDC',
+        toChain: 'ARBITRUM_MAINNET',
+        fromTokenAmount: 10_000_000n,
+        slippage: 0.005
+      })
+
+      const quoteCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/api/v2/quote'))
+      expect(String(quoteCall[0])).toContain('slippage=0.5')
+    })
+
+    test('rejects exact-out operations', async () => {
+      global.fetch = buildFetchRouter([NETWORKS_HANDLER])
+
+      const { account } = makeAccount()
+      const p = new LayerswapProtocolSolana(account)
+      stubConnection(p)
+
+      await expect(p.quoteSwidge({
+        fromToken: 'USDC',
+        toChain: 'ARBITRUM_MAINNET',
+        toTokenAmount: 10_000_000n
+      })).rejects.toThrow('exact-in')
+    })
+
+    test('rejects same-chain swaps (toChain missing)', async () => {
+      global.fetch = buildFetchRouter([NETWORKS_HANDLER])
+
+      const { account } = makeAccount()
+      const p = new LayerswapProtocolSolana(account)
+      stubConnection(p)
+
+      await expect(p.quoteSwidge({
+        fromToken: 'USDC',
+        toToken: 'SOL',
+        fromTokenAmount: 10_000_000n
+      })).rejects.toThrow('same-chain')
+    })
+
+    test('works without an account when fromChain is given (no gas fee entry)', async () => {
+      global.fetch = buildFetchRouter([NETWORKS_HANDLER, QUOTE_HANDLER()])
+
+      const p = new LayerswapProtocolSolana(undefined)
+
+      const quote = await p.quoteSwidge({
+        fromChain: 'SOLANA_MAINNET',
+        fromToken: 'USDC',
+        toChain: 'ARBITRUM_MAINNET',
+        fromTokenAmount: 10_000_000n
+      })
+
+      expect(quote.fees).toHaveLength(2)
+      expect(quote.fees.every((f) => f.included === true)).toBe(true)
+    })
+  })
+
+  describe('swidge', () => {
+    test('creates the swap, signs + broadcasts, and returns a WDK swidge result', async () => {
+      const { account, address } = makeAccount()
+      global.fetch = buildFetchRouter([
+        NETWORKS_HANDLER,
+        makeCreateSwapHandler({ sourceAddress: address }),
+        SPEEDUP_HANDLER
+      ])
+
+      const p = new LayerswapProtocolSolana(account)
+      const conn = stubConnection(p, { sendSignature: 'sig-swidge' })
+
+      const result = await p.swidge({
+        fromToken: 'USDC',
+        toToken: 'USDC',
+        toChain: 'ARBITRUM_MAINNET',
+        recipient: '0xa460AEbce0d3A4BecAd8ccf9D6D4861296c503Bd',
+        fromTokenAmount: 10_000_000n
+      })
+
+      expect(result.id).toBe('swap-abc-123')
+      expect(result.hash).toBe('sig-swidge')
+      expect(result.fromTokenAmount).toBe(10_000_000n)
+      expect(result.toTokenAmount).toBe(9_500_000n)
+      expect(result.toTokenAmountMin).toBe(9_450_000n)
+      expect(result.transactions).toEqual([{ hash: 'sig-swidge', chain: 'SOLANA_MAINNET', type: 'source' }])
+      expect(result.fees).toEqual([
+        expect.objectContaining({ type: 'protocol', amount: 50_000n, token: 'USDC', included: true }),
+        expect.objectContaining({ type: 'network', amount: 450_000n, token: 'USDC', included: true }),
+        expect.objectContaining({ type: 'network', amount: 5000n, token: 'SOL', included: false })
+      ])
+      expect(conn.sendRawTransaction).toHaveBeenCalledTimes(1)
+      expect(conn.sendRawTransaction.mock.calls[0][0]).toBeInstanceOf(Uint8Array)
+    })
+
+    test('defaults the recipient to the account address for same-VM destinations', async () => {
+      const { account, address } = makeAccount()
+      const fetchMock = buildFetchRouter([
+        NETWORKS_HANDLER,
+        makeCreateSwapHandler({ sourceAddress: address }),
+        SPEEDUP_HANDLER
+      ])
+      global.fetch = fetchMock
+
+      const p = new LayerswapProtocolSolana(account)
+      stubConnection(p)
+
+      await p.swidge({
+        fromToken: 'USDC',
+        toChain: 'SOLANA_DEVNET', // type 'solana', same as the source network
+        fromTokenAmount: 10_000_000n
+      })
+
+      const createCall = fetchMock.mock.calls.find(([url, init]) =>
+        init && init.method === 'POST' && /\/api\/v2\/swaps$/.test(new URL(url).pathname))
+      expect(JSON.parse(createCall[1].body).destination_address).toBe(address)
+    })
+
+    test('requires an explicit recipient for cross-VM destinations', async () => {
+      const { account } = makeAccount()
+      global.fetch = buildFetchRouter([NETWORKS_HANDLER])
+
+      const p = new LayerswapProtocolSolana(account)
+      const conn = stubConnection(p)
+
+      await expect(p.swidge({
+        fromToken: 'USDC',
+        toChain: 'ARBITRUM_MAINNET', // type 'evm' — address formats differ
+        fromTokenAmount: 10_000_000n
+      })).rejects.toThrow(/recipient/)
+
+      expect(conn.sendRawTransaction).not.toHaveBeenCalled()
+    })
+
+    test('enforces maxProtocolFeeBps and does not broadcast', async () => {
+      const { account, address } = makeAccount()
+      global.fetch = buildFetchRouter([
+        NETWORKS_HANDLER,
+        makeCreateSwapHandler({ sourceAddress: address })
+      ])
+
+      const p = new LayerswapProtocolSolana(account)
+      const conn = stubConnection(p)
+
+      // service_fee 0.05 on 10 USDC = 50 bps
+      await expect(p.swidge({
+        fromToken: 'USDC',
+        toToken: 'USDC',
+        toChain: 'ARBITRUM_MAINNET',
+        recipient: '0xa460AEbce0d3A4BecAd8ccf9D6D4861296c503Bd',
+        fromTokenAmount: 10_000_000n
+      }, { maxProtocolFeeBps: 49 })).rejects.toThrow('maximum protocol fee')
+
+      expect(conn.sendRawTransaction).not.toHaveBeenCalled()
+    })
+
+    test('throws when the quoted minimum output is below minAmountOut', async () => {
+      const { account, address } = makeAccount()
+      global.fetch = buildFetchRouter([
+        NETWORKS_HANDLER,
+        makeCreateSwapHandler({ sourceAddress: address })
+      ])
+
+      const p = new LayerswapProtocolSolana(account)
+      const conn = stubConnection(p)
+
+      // create-swap quote min_receive_amount is 9.45 USDC → 9_450_000n.
+      await expect(p.swidge({
+        fromToken: 'USDC',
+        toToken: 'USDC',
+        toChain: 'ARBITRUM_MAINNET',
+        recipient: '0xa460AEbce0d3A4BecAd8ccf9D6D4861296c503Bd',
+        fromTokenAmount: 10_000_000n,
+        minAmountOut: 9_500_000n
+      })).rejects.toThrow('minAmountOut')
+
+      expect(conn.sendRawTransaction).not.toHaveBeenCalled()
+    })
+
+    test('throws for read-only accounts', async () => {
+      // A plain object (no WalletAccountSolana prototype, no keyPair) represents the
+      // read-only case from the protocol's perspective — the writable duck-type gate
+      // rejects it.
+      const { account } = makeAccount({ writable: false })
+      const p = new LayerswapProtocolSolana(account)
+      stubConnection(p)
+
+      await expect(p.swidge({
+        fromToken: 'USDC',
+        toChain: 'ARBITRUM_MAINNET',
+        fromTokenAmount: 10_000_000n
+      })).rejects.toThrow('non read-only account')
+    })
+  })
+
+  describe('getSwidgeStatus', () => {
+    test('maps the Layerswap swap status and transactions to the WDK vocabulary', async () => {
+      global.fetch = buildFetchRouter([{
+        method: 'GET',
+        match: /^\/api\/v2\/swaps\/swap-abc-123$/,
+        status: 200,
+        body: () => ({
+          data: {
+            swap: {
+              id: 'swap-abc-123',
+              status: 'ls_transfer_pending',
+              transactions: [
+                { transaction_hash: 'sig-input', type: 'input', status: 'completed', network: SOLANA_MAINNET },
+                { transaction_hash: '0xoutput', type: 'output', status: 'initiated', network: ARBITRUM_MAINNET }
+              ]
+            }
+          }
+        })
+      }])
+
+      const { account } = makeAccount()
+      const p = new LayerswapProtocolSolana(account)
+
+      await expect(p.getSwidgeStatus('swap-abc-123')).resolves.toEqual({
+        status: 'pending',
+        transactions: [
+          { hash: 'sig-input', chain: 'SOLANA_MAINNET', type: 'source' },
+          { hash: '0xoutput', chain: 'ARBITRUM_MAINNET', type: 'destination' }
+        ]
+      })
+    })
+  })
+
+  describe('discovery', () => {
+    test('getSupportedChains maps the network catalog (works without an account)', async () => {
+      global.fetch = buildFetchRouter([NETWORKS_HANDLER])
+
+      const p = new LayerswapProtocolSolana(undefined)
+
+      await expect(p.getSupportedChains()).resolves.toEqual([
+        { id: 'SOLANA_MAINNET', name: 'SOLANA_MAINNET', type: 'solana', nativeToken: '' },
+        { id: 'ARBITRUM_MAINNET', name: 'ARBITRUM_MAINNET', type: 'evm', nativeToken: '' },
+        { id: 'SOLANA_DEVNET', name: 'SOLANA_DEVNET', type: 'solana', nativeToken: '' }
+      ])
+    })
+
+    test('getSupportedTokens flattens and scopes by chain', async () => {
+      global.fetch = buildFetchRouter([NETWORKS_HANDLER])
+
+      const p = new LayerswapProtocolSolana(undefined)
+
+      const tokens = await p.getSupportedTokens({ toChain: 'SOLANA_MAINNET' })
+      expect(tokens).toHaveLength(2)
+      expect(tokens.every((t) => t.chain === 'SOLANA_MAINNET')).toBe(true)
+      expect(tokens.find((t) => t.symbol === 'USDC').address).toBe(USDC_MINT)
     })
   })
 })

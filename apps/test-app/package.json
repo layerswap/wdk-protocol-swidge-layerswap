@@ -1,28 +1,28 @@
 {
-  "name": "@layerswap/wdk-bridge-layerswap-test-app",
+  "name": "@layerswap/wdk-swidge-layerswap-test-app",
   "version": "0.1.0",
-  "description": "CLI workspace package for exercising @layerswap/wdk-protocol-bridge-layerswap-evm end-to-end against a real Layerswap endpoint.",
+  "description": "CLI workspace package for exercising the Layerswap WDK swidge protocol packages end-to-end against a real Layerswap endpoint.",
   "type": "module",
   "private": true,
   "scripts": {
     "start": "node src/cli.mjs",
     "networks": "node src/cli.mjs networks",
+    "chains": "node src/cli.mjs chains",
     "quote": "node src/cli.mjs quote",
+    "swidge": "node src/cli.mjs swidge",
     "bridge": "node src/cli.mjs bridge",
     "status": "node src/cli.mjs status"
   },
   "dependencies": {
-    "@layerswap/wdk-protocol-bridge-layerswap-core": "workspace:*",
-    "@layerswap/wdk-protocol-bridge-layerswap-evm": "workspace:*",
-    "@layerswap/wdk-protocol-bridge-layerswap-bitcoin": "workspace:*",
-    "@layerswap/wdk-protocol-bridge-layerswap-solana": "workspace:*",
-    "@layerswap/wdk-protocol-bridge-layerswap-ton": "workspace:*",
-    "@layerswap/wdk-protocol-bridge-layerswap-tron": "workspace:*",
-    "@tetherto/wdk-wallet": "1.0.0-beta.8",
-    "@tetherto/wdk-wallet-btc": "1.0.0-beta.9",
-    "@tetherto/wdk-wallet-evm": "1.0.0-beta.12",
-    "@tetherto/wdk-wallet-solana": "1.0.0-beta.8",
-    "@tetherto/wdk-wallet-ton": "1.0.0-beta.8",
-    "@tetherto/wdk-wallet-tron": "1.0.0-beta.5"
+    "@layerswap/wdk-protocol-swidge-layerswap-core": "workspace:*",
+    "@layerswap/wdk-protocol-swidge-layerswap-evm": "workspace:*",
+    "@layerswap/wdk-protocol-swidge-layerswap-bitcoin": "workspace:*",
+    "@layerswap/wdk-protocol-swidge-layerswap-solana": "workspace:*",
+    "@layerswap/wdk-protocol-swidge-layerswap-ton": "workspace:*",
+    "@tetherto/wdk-wallet": "1.0.0-beta.16",
+    "@tetherto/wdk-wallet-btc": "1.0.0-beta.13",
+    "@tetherto/wdk-wallet-evm": "1.0.0-beta.16",
+    "@tetherto/wdk-wallet-solana": "1.0.0-beta.12",
+    "@tetherto/wdk-wallet-ton": "1.0.0-beta.12"
   }
 }

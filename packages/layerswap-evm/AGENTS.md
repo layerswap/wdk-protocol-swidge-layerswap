@@ -1,9 +1,9 @@
 # Agent Guide
 
-This repository is the Layerswap analog of the Tether WDK (Wallet Development Kit) bridge protocol packages — it implements `BridgeProtocol` from `@tetherto/wdk-wallet/protocols` so a WDK EVM wallet account can bridge tokens across chains via the Layerswap public API.
+This repository is the Layerswap analog of the Tether WDK (Wallet Development Kit) swidge protocol packages — it extends `SwidgeProtocol` from `@tetherto/wdk-wallet/protocols` (>= 1.0.0-beta.16) so a WDK EVM wallet account can swap and bridge tokens across chains via the Layerswap public API. The legacy `bridge`/`quoteBridge` surface is kept as thin adapters over `swidge`/`quoteSwidge`.
 
 ## Project Overview
-- **Architecture:** Single `LayerswapProtocolEvm` class. The chain-agnostic HTTP client (`LayerswapApiClient`) and the network/token/decimal helpers live in the sibling package `@layerswap/wdk-protocol-bridge-layerswap-core` and are imported from there — do not duplicate them here.
+- **Architecture:** Single `LayerswapProtocolEvm` class. The chain-agnostic HTTP client (`LayerswapApiClient`) and the network/token/decimal helpers live in the sibling package `@layerswap/wdk-protocol-swidge-layerswap-core` and are imported from there — do not duplicate them here.
 - **Runtime:** Node.js and Bare. No browser-only globals; HTTP via `fetch`.
 
 ## Tech Stack & Tooling
@@ -35,11 +35,13 @@ This repository is the Layerswap analog of the Tether WDK (Wallet Development Ki
 4. **Build types:** `npm run build:types`
 
 ## Key Files
-- `index.js` — public entry: default export of `LayerswapProtocolEvm` plus its config/options/result typedefs. No `LayerswapApiClient` re-export — consumers import it directly from `@layerswap/wdk-protocol-bridge-layerswap-core`.
+- `index.js` — public entry: default export of `LayerswapProtocolEvm` plus its config/options/result typedefs. No `LayerswapApiClient` re-export — consumers import it directly from `@layerswap/wdk-protocol-swidge-layerswap-core`.
 - `bare.js` — Bare runtime wrapper.
-- `src/layerswap-protocol-evm.js` — `BridgeProtocol` implementation. Only EVM-specific file in this package; the API client and resolvers come from core.
+- `src/layerswap-protocol-evm.js` — `SwidgeProtocol` implementation. Only EVM-specific file in this package; the API client, resolvers, and swidge mapping helpers come from core.
 - `types/` — generated; do not edit by hand.
 
 ## Semantic notes
-- `BridgeResult.bridgeFee` is in **source-token base units** (Layerswap deducts its fee from the bridged amount, not paid as native gas). The WDK base type documents it as native — this divergence is intentional and called out in the protocol's JSDoc and README.
-- `LayerswapProtocolConfig.bridgeMaxFee` is compared against `bridgeFee` only.
+- Swidge fees are itemised: Layerswap's `included: true` entries are in **source-token base units**; the source-chain gas entry is non-included and in **native units**. Never sum across entries with different `token`s.
+- Exact-in only (`fromTokenAmount`); `toTokenAmount` (exact-out) throws. `toChain` is required — Layerswap has no same-chain swaps, so the inherited `swap()` always throws.
+- WDK swidge `slippage` is a decimal (0.01 = 1%); legacy `BridgeOptions.slippage` stays a percent string and is divided by 100 in `_toSwidgeOptions`.
+- Legacy `BridgeResult.bridgeFee` is in **source-token base units** (= sum of `included` swidge fees). `LayerswapProtocolConfig.bridgeMaxFee` is compared against that sum only.

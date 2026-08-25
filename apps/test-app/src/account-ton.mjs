@@ -16,7 +16,7 @@ export async function buildAccount (cfg) {
 
   // The wallet's `tonClient.secretKey` is forwarded to `TonClient({ apiKey })` —
   // it's the toncenter `X-API-Key`, not the wallet's signing key. Without it,
-  // toncenter throttles to ~1 req/s and the bridge() flow (which makes 5+
+  // toncenter throttles to ~1 req/s and the swidge() flow (which makes 5+
   // sequential RPC calls) trips a 429. Grab a free key from @toncenterbot on
   // Telegram and set LAYERSWAP_TON_API_KEY.
   const tonApiKey = process.env.LAYERSWAP_TON_API_KEY
