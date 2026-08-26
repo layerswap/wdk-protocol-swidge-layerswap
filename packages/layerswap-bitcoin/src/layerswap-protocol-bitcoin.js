@@ -18,7 +18,6 @@ import { SwidgeProtocol } from '@tetherto/wdk-wallet/protocols'
 import { Psbt, opcodes, script as bscript } from 'bitcoinjs-lib'
 import { coinselect } from '@bitcoinerlab/coinselect'
 import { DescriptorsFactory } from '@bitcoinerlab/descriptors'
-import * as ecc from '@bitcoinerlab/secp256k1'
 
 import LayerswapApiClient, {
   resolveNetworkByName,
@@ -73,7 +72,7 @@ const OP_RETURN_MAX_BYTES = 80
 // 10 sat/vB × ~150 vB (1 input + 2 outputs P2WPKH + OP_RETURN) ≈ 1500 sats.
 const BTC_FEE_APPROX_SATS = 1500n
 
-const { Output } = DescriptorsFactory(ecc)
+const { Output } = DescriptorsFactory()
 
 /**
  * @typedef {SwidgeProtocolConfig & Object} LayerswapProtocolConfig
@@ -730,7 +729,7 @@ export default class LayerswapProtocolBitcoin extends SwidgeProtocol {
 
     const utxosForCoinSelect = unspent.map((u) => ({
       output: fromOutput,
-      value: u.value,
+      value: account._toBigInt(u.value),
       __ref: u
     }))
 
@@ -741,7 +740,7 @@ export default class LayerswapProtocolBitcoin extends SwidgeProtocol {
       utxos: utxosForCoinSelect,
       remainder: fromOutput,
       targets: [
-        { output: toOutput, value: Number(amount) }
+        { output: toOutput, value: amount }
       ],
       feeRate: Number(feeRate)
     })
@@ -758,7 +757,7 @@ export default class LayerswapProtocolBitcoin extends SwidgeProtocol {
 
     const selectedUtxos = result.utxos.map(({ __ref }) => __ref)
     const total = selectedUtxos.reduce((s, u) => s + account._toBigInt(u.value), 0n)
-    const baseFee = account._toBigInt(Math.max(result.fee ?? 0, 0))
+    const baseFee = result.fee ?? 0n
     let fee = baseFee + opReturnExtraFee
     let changeValue = total - fee - amount
 
@@ -773,7 +772,9 @@ export default class LayerswapProtocolBitcoin extends SwidgeProtocol {
 
     const psbt = new Psbt({ network })
 
-    const fromAddressScriptHex = (await this._getOutputScriptHex(fromAddress, network)).toString('hex')
+    const fromAddressScriptHex = Buffer.from(
+      await this._getOutputScriptHex(fromAddress, network)
+    ).toString('hex')
 
     const masterNode = this._toBufferHdSigner(account._masterNode)
 
@@ -793,7 +794,7 @@ export default class LayerswapProtocolBitcoin extends SwidgeProtocol {
           ...baseInput,
           witnessUtxo: {
             script: Buffer.from(utxo.vout?.scriptPubKey?.hex ?? fromAddressScriptHex, 'hex'),
-            value: Number(utxo.value)
+            value: account._toBigInt(utxo.value)
           }
         })
       } else {
@@ -805,10 +806,10 @@ export default class LayerswapProtocolBitcoin extends SwidgeProtocol {
       }
     }
 
-    psbt.addOutput({ address: depositAddress, value: Number(amount) })
-    psbt.addOutput({ script: opReturnScript, value: 0 })
+    psbt.addOutput({ address: depositAddress, value: amount })
+    psbt.addOutput({ script: opReturnScript, value: 0n })
     if (changeValue > 0n) {
-      psbt.addOutput({ address: fromAddress, value: Number(changeValue) })
+      psbt.addOutput({ address: fromAddress, value: changeValue })
     }
 
     selectedUtxos.forEach((_, index) => psbt.signInputHD(index, masterNode))
@@ -822,9 +823,8 @@ export default class LayerswapProtocolBitcoin extends SwidgeProtocol {
   /**
    * Wraps the wallet's BIP-32 master node so every byte field crossing into
    * bitcoinjs-lib is a Buffer. bip32 v5 returns Uint8Arrays for keys,
-   * fingerprints, and signatures, which bitcoinjs-lib 6 rejects (typeforce
-   * Buffer checks, `publicKey.equals`, partialSig serialisation); bip32 v4
-   * already returns Buffers, making this a cheap no-op wrap.
+   * fingerprints, and signatures, which bitcoinjs-lib expects as Buffers for
+   * `publicKey.equals` and partialSig serialisation.
    *
    * @private
    * @param {Object} node - An HDSigner-compatible BIP-32 node.

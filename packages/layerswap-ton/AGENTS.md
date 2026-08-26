@@ -1,6 +1,6 @@
 # Agent Guide — layerswap-ton
 
-Sibling of `layerswap-evm`, `layerswap-solana`, and `layerswap-tron` for the TON source VM. Extends `SwidgeProtocol` (from `@tetherto/wdk-wallet/protocols`, >= 1.0.0-beta.16) for `@tetherto/wdk-wallet-ton` accounts, with the legacy `bridge`/`quoteBridge` surface kept as thin adapters over `swidge`.
+Sibling of `layerswap-evm`, `layerswap-solana`, and `layerswap-tron` for the TON source VM. Extends `SwidgeProtocol` (from `@tetherto/wdk-wallet/protocols`, >= 1.0.0-beta.17) for `@tetherto/wdk-wallet-ton` accounts, with the legacy `bridge`/`quoteBridge` surface kept as thin adapters over `swidge`.
 
 ## Project Overview
 
@@ -38,7 +38,7 @@ The protocol therefore defaults to `TON_MAINNET` for the source chain. Users can
 
 ## wdk-wallet version pin
 
-All packages pin `@tetherto/wdk-wallet@1.0.0-beta.16` (the version verified to ship `SwidgeProtocol` with the current contract) as the dev dependency, with peer dep `>=1.0.0-beta.16`. The wallet-account packages bundle their own older copy of `@tetherto/wdk-wallet` — that's fine because accounts are consumed duck-typed, never via `instanceof`.
+All packages pin `@tetherto/wdk-wallet@1.0.0-beta.17` as the dev dependency, with peer dep `>=1.0.0-beta.17`. Accounts are consumed duck-typed, never via `instanceof`.
 
 ## Coding conventions
 

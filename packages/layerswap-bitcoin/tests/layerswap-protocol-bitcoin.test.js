@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, jest, test } from '@jest/globa
 
 import { networks, payments, Psbt, Transaction } from 'bitcoinjs-lib'
 import { BIP32Factory } from 'bip32'
-import * as ecc from '@bitcoinerlab/secp256k1'
+import { ecc } from '@bitcoinerlab/descriptors'
 
 import LayerswapProtocolBitcoin from '../index.js'
 
@@ -37,8 +37,8 @@ const TEST_SEED = Buffer.alloc(64).fill(0xab) // deterministic seed for tests
 const TEST_NETWORK = networks.bitcoin
 const TEST_PATH = "m/84'/0'/0'/0/0"
 
-// bip32 v5 returns Uint8Arrays for keys/fingerprints/signatures, while bitcoinjs-lib 6
-// expects Buffers (typeforce `isPoint`, `node.publicKey.equals`, partialSig serialisation).
+// bip32 v5 returns Uint8Arrays for keys/fingerprints/signatures, while bitcoinjs-lib
+// expects Buffers for `node.publicKey.equals` and partialSig serialisation.
 // Wrap the node in a Buffer-returning HDSigner adapter, matching the Buffer-based master
 // node the wallet package hands to `psbt.signInputHD`.
 function toHdSigner (node) {
@@ -86,7 +86,7 @@ function makeUtxo ({ value = 100_000_000, txHash = 'a'.repeat(64), txPos = 0 } =
     tx_hash: txHash,
     tx_pos: txPos,
     value,
-    vout: { value, scriptPubKey: { hex: script.toString('hex') } }
+    vout: { value, scriptPubKey: { hex: Buffer.from(script).toString('hex') } }
   }
 }
 
@@ -416,14 +416,14 @@ describe('LayerswapProtocolBitcoin', () => {
       expect(tx.outs.length).toBeGreaterThanOrEqual(2) // deposit + OP_RETURN, change optional
 
       // Output #0 = deposit.
-      expect(tx.outs[0].value).toBe(100_000)
+      expect(tx.outs[0].value).toBe(100_000n)
 
       // Output #1 = OP_RETURN with hex-of-BigInt(seq).toString(16) (+ verbatim tail).
       const opReturnScript = tx.outs[1].script
       expect(opReturnScript[0]).toBe(0x6a) // OP_RETURN opcode
       // Skip the push opcode + length byte; remaining bytes are the memo (UTF-8 of '1e41').
       const memoBytes = opReturnScript.subarray(2)
-      expect(memoBytes.toString('utf8')).toBe('1e41')
+      expect(Buffer.from(memoBytes).toString('utf8')).toBe('1e41')
 
       // tx hash matches what we returned.
       expect(result.hash).toBe(tx.getId())
@@ -812,9 +812,9 @@ describe('LayerswapProtocolBitcoin', () => {
       expect(result.transactions).toEqual([{ hash: tx.getId(), chain: 'BITCOIN_MAINNET', type: 'source' }])
 
       // Output #0 = deposit, output #1 = OP_RETURN with hex-of-Number(call_data).
-      expect(tx.outs[0].value).toBe(100_000)
+      expect(tx.outs[0].value).toBe(100_000n)
       expect(tx.outs[1].script[0]).toBe(0x6a)
-      expect(tx.outs[1].script.subarray(2).toString('utf8')).toBe('1e41')
+      expect(Buffer.from(tx.outs[1].script.subarray(2)).toString('utf8')).toBe('1e41')
     })
 
     test('requires an explicit recipient for cross-VM destinations', async () => {

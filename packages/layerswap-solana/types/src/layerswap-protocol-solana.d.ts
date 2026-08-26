@@ -1,3 +1,74 @@
+import { SwidgeProtocol } from '@tetherto/wdk-wallet/protocols';
+import LayerswapApiClient from '@layerswap/wdk-protocol-swidge-layerswap-core';
+export type SwidgeProtocolConfig = import('@tetherto/wdk-wallet/protocols').SwidgeProtocolConfig;
+export type SwidgeOptions = import('@tetherto/wdk-wallet/protocols').SwidgeOptions;
+export type SwidgeQuote = import('@tetherto/wdk-wallet/protocols').SwidgeQuote;
+export type SwidgeResult = import('@tetherto/wdk-wallet/protocols').SwidgeResult;
+export type SwidgeFee = import('@tetherto/wdk-wallet/protocols').SwidgeFee;
+export type SwidgeStatusResult = import('@tetherto/wdk-wallet/protocols').SwidgeStatusResult;
+export type SwidgeSupportedChain = import('@tetherto/wdk-wallet/protocols').SwidgeSupportedChain;
+export type SwidgeSupportedToken = import('@tetherto/wdk-wallet/protocols').SwidgeSupportedToken;
+export type SwidgeSupportedTokensOptions = import('@tetherto/wdk-wallet/protocols').SwidgeSupportedTokensOptions;
+export type BridgeResult = import('@tetherto/wdk-wallet/protocols').BridgeResult;
+export type WalletAccountSolana = import('@tetherto/wdk-wallet-solana').WalletAccountSolana;
+export type WalletAccountReadOnlySolana = import('@tetherto/wdk-wallet-solana').WalletAccountReadOnlySolana;
+export type LayerswapNetwork = import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapNetwork;
+export type LayerswapToken = import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapToken;
+export type LayerswapDepositAction = import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapDepositAction;
+export type LayerswapSwap = import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapSwap;
+export type LayerswapQuote = import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapQuote;
+export type LayerswapProtocolConfig = SwidgeProtocolConfig & Object;
+export type LayerswapSwidgeOptions = SwidgeOptions & Object;
+export type BridgeOptions = {
+    /**
+     * - Layerswap destination network name (e.g. `'ARBITRUM_MAINNET'`).
+     */
+    targetChain: string;
+    /**
+     * - Destination-chain recipient address, in its native format.
+     */
+    recipient: string;
+    /**
+     * - Source token: SPL mint base58 address OR Layerswap symbol
+     *   (e.g. `'SOL'`, `'USDC'`).
+     */
+    token: string;
+    /**
+     * - Source amount in base units (lamports for SOL, smallest unit
+     *   for SPL tokens).
+     */
+    amount: number | bigint;
+    /**
+     * - Destination token (address or symbol). Defaults to the
+     *         source token's symbol.
+     */
+    destinationToken?: string;
+    /**
+     * - Override auto-detected source network name. Auto-detection
+     *              uses `Connection.getGenesisHash()` against a table of
+     *              known Solana cluster hashes.
+     */
+    sourceChain?: string;
+    /**
+     * - Request a native-gas drop on the destination chain.
+     */
+    refuel?: boolean;
+    /**
+     * - Slippage tolerance percentage, e.g. `'0.5'`.
+     */
+    slippage?: string;
+    /**
+     * - External reference id for the created swap.
+     */
+    referenceId?: string;
+    /**
+     * - Refund address used if the swap fails after deposit.
+     */
+    refundAddress?: string;
+};
+export type LayerswapBridgeResult = BridgeResult & {
+    swapId: string;
+};
 /**
  * WDK swidge protocol that drives a Layerswap swap from a Solana wallet account.
  *
@@ -29,44 +100,23 @@
  */
 export default class LayerswapProtocolSolana extends SwidgeProtocol {
     /**
-     * Creates a new swidge protocol for chain/token discovery only, without a wallet account.
-     *
-     * @overload
-     * @param {undefined} [account] - No account; only discovery and `fromChain`-scoped quotes work.
-     * @param {LayerswapProtocolConfig} [config] - The layerswap protocol configuration.
-     */
-    constructor(account?: undefined, config?: LayerswapProtocolConfig);
-    /**
-     * Creates a new read-only interface to the layerswap protocol for solana blockchains.
-     *
-     * @overload
-     * @param {WalletAccountReadOnlySolana} account - The wallet account to use to interact with the protocol.
-     * @param {LayerswapProtocolConfig} [config] - The layerswap protocol configuration.
-     */
-    constructor(account: WalletAccountReadOnlySolana, config?: LayerswapProtocolConfig);
-    /**
-     * Creates a new interface to the layerswap protocol for solana blockchains.
-     *
-     * @overload
-     * @param {WalletAccountSolana} account - The wallet account to use to interact with the protocol.
-     * @param {LayerswapProtocolConfig} [config] - The layerswap protocol configuration.
-     */
-    constructor(account: WalletAccountSolana, config?: LayerswapProtocolConfig);
-    /**
      * @private
      * @type {LayerswapApiClient}
      */
-    private _client;
+    _client;
     /**
      * @private
      * @type {Connection | undefined}
      */
-    private _connection;
+    _connection;
     /**
      * @private
      * @type {string | undefined}
      */
-    private _sourceNetworkName;
+    _sourceNetworkName;
+    constructor(account?: undefined, config?: LayerswapProtocolConfig);
+    constructor(account: WalletAccountReadOnlySolana, config?: LayerswapProtocolConfig);
+    constructor(account: WalletAccountSolana, config?: LayerswapProtocolConfig);
     /**
      * Quotes the estimated costs and output of a Layerswap swidge operation without
      * creating a swap. Layerswap only supports exact-in operations; passing
@@ -96,7 +146,7 @@ export default class LayerswapProtocolSolana extends SwidgeProtocol {
      * @returns {Promise<SwidgeResult>} The swidge execution result. `id` is the Layerswap swap
      *   id (use it with `getSwidgeStatus`); `hash` is the source-chain deposit transaction signature.
      */
-    swidge(options: LayerswapSwidgeOptions, config?: SwidgeProtocolConfig & Pick<LayerswapProtocolConfig, "bridgeMaxFee">): Promise<SwidgeResult>;
+    swidge(options: LayerswapSwidgeOptions, config?: SwidgeProtocolConfig & Pick<LayerswapProtocolConfig, 'bridgeMaxFee'>): Promise<SwidgeResult>;
     /**
      * Retrieves the current status of a Layerswap swap, mapped to the WDK swidge
      * status vocabulary, along with the source/destination/refund transactions
@@ -110,6 +160,21 @@ export default class LayerswapProtocolSolana extends SwidgeProtocol {
      * @throws {Error} If no swap exists with the given id.
      */
     getSwidgeStatus(id: string): Promise<SwidgeStatusResult>;
+    /**
+     * Retrieves the chains supported by Layerswap.
+     *
+     * @returns {Promise<SwidgeSupportedChain[]>} The supported chains. `id` is the Layerswap
+     *   network name (e.g. `'SOLANA_MAINNET'`) — use it as `fromChain`/`toChain`.
+     */
+    getSupportedChains(): Promise<SwidgeSupportedChain[]>;
+    /**
+     * Retrieves the tokens supported by Layerswap, optionally scoped to a chain.
+     *
+     * @param {SwidgeSupportedTokensOptions} [options] - Chain-scoped filters (`toChain`,
+     *   or `fromChain` when `toChain` is absent). `fromToken` route scoping is not applied.
+     * @returns {Promise<SwidgeSupportedToken[]>} The supported tokens.
+     */
+    getSupportedTokens(options?: SwidgeSupportedTokensOptions): Promise<SwidgeSupportedToken[]>;
     /**
      * Bridges a token to a different blockchain via Layerswap.
      *
@@ -126,7 +191,7 @@ export default class LayerswapProtocolSolana extends SwidgeProtocol {
      * @param {Pick<LayerswapProtocolConfig, 'bridgeMaxFee'>} [config] - Per-call overrides.
      * @returns {Promise<LayerswapBridgeResult>} The bridge's result, augmented with the Layerswap swap id.
      */
-    bridge(options: BridgeOptions, config?: Pick<LayerswapProtocolConfig, "bridgeMaxFee">): Promise<LayerswapBridgeResult>;
+    bridge(options: BridgeOptions, config?: Pick<LayerswapProtocolConfig, 'bridgeMaxFee'>): Promise<LayerswapBridgeResult>;
     /**
      * Quotes the costs of a Layerswap bridge operation without creating a swap.
      *
@@ -138,7 +203,7 @@ export default class LayerswapProtocolSolana extends SwidgeProtocol {
      * @param {BridgeOptions} options - The bridge's options.
      * @returns {Promise<Omit<BridgeResult, 'hash'>>} The bridge's quotes.
      */
-    quoteBridge(options: BridgeOptions): Promise<Omit<BridgeResult, "hash">>;
+    quoteBridge(options: BridgeOptions): Promise<Omit<BridgeResult, 'hash'>>;
     /**
      * Returns the underlying API client, for raw access to the Layerswap v2 API.
      *
@@ -159,7 +224,7 @@ export default class LayerswapProtocolSolana extends SwidgeProtocol {
      */
     getTransactionStatus(signature: string, options?: {
         sourceChain?: string;
-    }): Promise<import("@layerswap/wdk-protocol-swidge-layerswap-core").LayerswapTransactionStatus>;
+    }): Promise<import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapTransactionStatus>;
     /**
      * Maps the legacy bridge options onto the swidge options vocabulary. The legacy
      * `slippage` is a percent string ('0.5' = 0.5%); swidge takes a decimal (0.005).
@@ -305,77 +370,3 @@ export default class LayerswapProtocolSolana extends SwidgeProtocol {
      */
     private _notifyDepositBroadcast;
 }
-export type SwidgeProtocolConfig = import("@tetherto/wdk-wallet/protocols").SwidgeProtocolConfig;
-export type SwidgeOptions = import("@tetherto/wdk-wallet/protocols").SwidgeOptions;
-export type SwidgeQuote = import("@tetherto/wdk-wallet/protocols").SwidgeQuote;
-export type SwidgeResult = import("@tetherto/wdk-wallet/protocols").SwidgeResult;
-export type SwidgeFee = import("@tetherto/wdk-wallet/protocols").SwidgeFee;
-export type SwidgeStatusResult = import("@tetherto/wdk-wallet/protocols").SwidgeStatusResult;
-export type SwidgeSupportedChain = import("@tetherto/wdk-wallet/protocols").SwidgeSupportedChain;
-export type SwidgeSupportedToken = import("@tetherto/wdk-wallet/protocols").SwidgeSupportedToken;
-export type SwidgeSupportedTokensOptions = import("@tetherto/wdk-wallet/protocols").SwidgeSupportedTokensOptions;
-export type BridgeResult = import("@tetherto/wdk-wallet/protocols").BridgeResult;
-export type WalletAccountSolana = import("@tetherto/wdk-wallet-solana").WalletAccountSolana;
-export type WalletAccountReadOnlySolana = import("@tetherto/wdk-wallet-solana").WalletAccountReadOnlySolana;
-export type LayerswapNetwork = import("@layerswap/wdk-protocol-swidge-layerswap-core").LayerswapNetwork;
-export type LayerswapToken = import("@layerswap/wdk-protocol-swidge-layerswap-core").LayerswapToken;
-export type LayerswapDepositAction = import("@layerswap/wdk-protocol-swidge-layerswap-core").LayerswapDepositAction;
-export type LayerswapSwap = import("@layerswap/wdk-protocol-swidge-layerswap-core").LayerswapSwap;
-export type LayerswapQuote = import("@layerswap/wdk-protocol-swidge-layerswap-core").LayerswapQuote;
-export type LayerswapProtocolConfig = SwidgeProtocolConfig & any;
-/**
- * Layerswap-specific extensions to the WDK swidge options.
- */
-export type LayerswapSwidgeOptions = SwidgeOptions & any;
-export type BridgeOptions = {
-    /**
-     * - Layerswap destination network name (e.g. `'ARBITRUM_MAINNET'`).
-     */
-    targetChain: string;
-    /**
-     * - Destination-chain recipient address, in its native format.
-     */
-    recipient: string;
-    /**
-     * - Source token: SPL mint base58 address OR Layerswap symbol
-     *   (e.g. `'SOL'`, `'USDC'`).
-     */
-    token: string;
-    /**
-     * - Source amount in base units (lamports for SOL, smallest unit
-     *   for SPL tokens).
-     */
-    amount: number | bigint;
-    /**
-     * - Destination token (address or symbol). Defaults to the
-     *         source token's symbol.
-     */
-    destinationToken?: string;
-    /**
-     * - Override auto-detected source network name. Auto-detection
-     *              uses `Connection.getGenesisHash()` against a table of
-     *              known Solana cluster hashes.
-     */
-    sourceChain?: string;
-    /**
-     * - Request a native-gas drop on the destination chain.
-     */
-    refuel?: boolean;
-    /**
-     * - Slippage tolerance percentage, e.g. `'0.5'`.
-     */
-    slippage?: string;
-    /**
-     * - External reference id for the created swap.
-     */
-    referenceId?: string;
-    /**
-     * - Refund address used if the swap fails after deposit.
-     */
-    refundAddress?: string;
-};
-export type LayerswapBridgeResult = BridgeResult & {
-    swapId: string;
-};
-import { SwidgeProtocol } from '@tetherto/wdk-wallet/protocols';
-import LayerswapApiClient from '@layerswap/wdk-protocol-swidge-layerswap-core';

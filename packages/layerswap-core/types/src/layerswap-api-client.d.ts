@@ -1,3 +1,112 @@
+export type LayerswapToken = {
+    symbol: string;
+    contract: string | null;
+    decimals: number;
+    price_in_usd?: number;
+    display_asset?: string;
+};
+export type LayerswapNetwork = {
+    name: string;
+    chain_id: string | null;
+    type: string;
+    tokens: LayerswapToken[];
+    display_name?: string;
+    /**
+     * - The network's native gas token.
+     */
+    token?: LayerswapToken;
+};
+export type LayerswapQuote = {
+    requested_amount: number;
+    receive_amount: number;
+    min_receive_amount: number;
+    total_fee: number;
+    total_fee_in_usd: number;
+    blockchain_fee: number;
+    service_fee: number;
+    avg_completion_time?: string;
+    slippage?: number;
+};
+export type LayerswapDepositAction = {
+    amount: number;
+    amount_in_base_units: string;
+    call_data: string;
+    to_address?: string;
+    token: LayerswapToken;
+    fee_token: LayerswapToken;
+    network: LayerswapNetwork;
+    order: number;
+    type: 'transfer' | 'manual_transfer';
+};
+export type LayerswapSwapStatusValue = 'user_transfer_pending' | 'ls_transfer_pending' | 'completed' | 'failed' | 'expired' | 'cancelled' | 'pending_refund' | 'refunded';
+export type LayerswapSwapTransaction = {
+    transaction_hash: string;
+    type: 'input' | 'output' | 'refuel' | 'refund';
+    status: 'completed' | 'initiated' | 'pending';
+    amount?: number;
+    from?: string;
+    to?: string;
+    timestamp?: string;
+    confirmations?: number;
+    max_confirmations?: number;
+    token?: LayerswapToken;
+    network?: LayerswapNetwork | string;
+};
+export type LayerswapSwap = {
+    id: string;
+    created_date: string;
+    status: LayerswapSwapStatusValue | string;
+    source_network: LayerswapNetwork;
+    source_token: LayerswapToken;
+    destination_network: LayerswapNetwork;
+    destination_token: LayerswapToken;
+    destination_address: string;
+    requested_amount: number;
+    source_address?: string;
+    fail_reason?: string | null;
+    transactions?: LayerswapSwapTransaction[];
+};
+export type LayerswapSwapResponse = {
+    swap: LayerswapSwap;
+    deposit_actions?: LayerswapDepositAction[];
+    quote?: {
+        quote: LayerswapQuote;
+    };
+};
+export type LayerswapCreateSwapParams = {
+    source_network: string;
+    source_token: string;
+    destination_network: string;
+    destination_token: string;
+    destination_address: string;
+    amount: string | number;
+    use_deposit_address: boolean;
+    source_address?: string;
+    refund_address?: string;
+    refuel?: boolean;
+    slippage?: string;
+    reference_id?: string;
+};
+export type LayerswapGetQuoteParams = {
+    source_network: string;
+    source_token: string;
+    destination_network: string;
+    destination_token: string;
+    amount: string | number;
+    use_deposit_address: boolean;
+    source_address?: string;
+    refuel?: boolean;
+    slippage?: string;
+};
+export type LayerswapTransactionStatusValue = 'completed' | 'failed' | 'pending';
+export type LayerswapTransactionStatus = {
+    status: LayerswapTransactionStatusValue;
+};
+export type LayerswapApiClientConfig = {
+    apiKey?: string;
+    apiUrl?: string;
+    requestTimeoutMs?: number;
+};
 /**
  * @typedef {Object} LayerswapToken
  * @property {string} symbol
@@ -144,25 +253,25 @@
  */
 export default class LayerswapApiClient {
     /**
-     * @param {LayerswapApiClientConfig} [config]
-     */
-    constructor(config?: LayerswapApiClientConfig);
-    /**
      * @private
      * @type {string | undefined}
      */
-    private _apiKey;
+    _apiKey;
     /** @private */
-    private _baseUrl;
+    _baseUrl;
     /** @private */
-    private _timeoutMs;
+    _timeoutMs;
     /**
      * Cached `/networks` response.
      *
      * @private
      * @type {Promise<LayerswapNetwork[]> | null}
      */
-    private _networksPromise;
+    _networksPromise;
+    /**
+     * @param {LayerswapApiClientConfig} [config]
+     */
+    constructor(config?: LayerswapApiClientConfig);
     /**
      * Returns the Layerswap network/token catalog. Cached for the lifetime of this client.
      *
@@ -238,128 +347,3 @@ export default class LayerswapApiClient {
      */
     private _randomCorrelationId;
 }
-export type LayerswapToken = {
-    symbol: string;
-    contract: string | null;
-    decimals: number;
-    price_in_usd?: number;
-    display_asset?: string;
-};
-export type LayerswapNetwork = {
-    name: string;
-    chain_id: string | null;
-    type: string;
-    tokens: LayerswapToken[];
-    display_name?: string;
-    /**
-     * - The network's native gas token.
-     */
-    token?: LayerswapToken;
-};
-export type LayerswapQuote = {
-    requested_amount: number;
-    receive_amount: number;
-    min_receive_amount: number;
-    total_fee: number;
-    total_fee_in_usd: number;
-    blockchain_fee: number;
-    service_fee: number;
-    avg_completion_time?: string;
-    slippage?: number;
-};
-export type LayerswapDepositAction = {
-    amount: number;
-    amount_in_base_units: string;
-    call_data: string;
-    to_address?: string;
-    token: LayerswapToken;
-    fee_token: LayerswapToken;
-    network: LayerswapNetwork;
-    order: number;
-    type: "transfer" | "manual_transfer";
-};
-/**
- * Layerswap's swap lifecycle statuses, as serialized on the wire by the v2 API:
- * - `user_transfer_pending`: waiting for the user's deposit on the source network.
- * - `ls_transfer_pending`: deposit detected; Layerswap is executing the destination payout.
- * - `completed`: funds delivered to the destination address.
- * - `pending_refund` / `refunded`: the swap could not complete and funds are being / have been returned.
- */
-export type LayerswapSwapStatusValue = "user_transfer_pending" | "ls_transfer_pending" | "completed" | "failed" | "expired" | "cancelled" | "pending_refund" | "refunded";
-/**
- * A source/destination/refuel/refund transaction attached to a swap by Layerswap.
- */
-export type LayerswapSwapTransaction = {
-    transaction_hash: string;
-    type: "input" | "output" | "refuel" | "refund";
-    status: "completed" | "initiated" | "pending";
-    amount?: number;
-    from?: string;
-    to?: string;
-    timestamp?: string;
-    confirmations?: number;
-    max_confirmations?: number;
-    token?: LayerswapToken;
-    network?: LayerswapNetwork | string;
-};
-export type LayerswapSwap = {
-    id: string;
-    created_date: string;
-    status: LayerswapSwapStatusValue | string;
-    source_network: LayerswapNetwork;
-    source_token: LayerswapToken;
-    destination_network: LayerswapNetwork;
-    destination_token: LayerswapToken;
-    destination_address: string;
-    requested_amount: number;
-    source_address?: string;
-    fail_reason?: string | null;
-    transactions?: LayerswapSwapTransaction[];
-};
-export type LayerswapSwapResponse = {
-    swap: LayerswapSwap;
-    deposit_actions?: LayerswapDepositAction[];
-    quote?: {
-        quote: LayerswapQuote;
-    };
-};
-export type LayerswapCreateSwapParams = {
-    source_network: string;
-    source_token: string;
-    destination_network: string;
-    destination_token: string;
-    destination_address: string;
-    amount: string | number;
-    use_deposit_address: boolean;
-    source_address?: string;
-    refund_address?: string;
-    refuel?: boolean;
-    slippage?: string;
-    reference_id?: string;
-};
-export type LayerswapGetQuoteParams = {
-    source_network: string;
-    source_token: string;
-    destination_network: string;
-    destination_token: string;
-    amount: string | number;
-    use_deposit_address: boolean;
-    source_address?: string;
-    refuel?: boolean;
-    slippage?: string;
-};
-/**
- * Layerswap's on-chain assessment of a deposit transaction. Lowercase values match the
- * web app's enum exactly (`completed` once the source-chain tx is confirmed and
- * Layerswap has indexed it, `failed` if the chain rejected it, `pending` while in the
- * mempool or awaiting confirmations).
- */
-export type LayerswapTransactionStatusValue = "completed" | "failed" | "pending";
-export type LayerswapTransactionStatus = {
-    status: LayerswapTransactionStatusValue;
-};
-export type LayerswapApiClientConfig = {
-    apiKey?: string;
-    apiUrl?: string;
-    requestTimeoutMs?: number;
-};

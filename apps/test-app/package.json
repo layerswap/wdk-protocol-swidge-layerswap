@@ -19,10 +19,10 @@
     "@layerswap/wdk-protocol-swidge-layerswap-bitcoin": "workspace:*",
     "@layerswap/wdk-protocol-swidge-layerswap-solana": "workspace:*",
     "@layerswap/wdk-protocol-swidge-layerswap-ton": "workspace:*",
-    "@tetherto/wdk-wallet": "1.0.0-beta.16",
-    "@tetherto/wdk-wallet-btc": "1.0.0-beta.13",
-    "@tetherto/wdk-wallet-evm": "1.0.0-beta.16",
-    "@tetherto/wdk-wallet-solana": "1.0.0-beta.12",
-    "@tetherto/wdk-wallet-ton": "1.0.0-beta.12"
+    "@tetherto/wdk-wallet": "1.0.0-beta.17",
+    "@tetherto/wdk-wallet-btc": "1.0.0-beta.14",
+    "@tetherto/wdk-wallet-evm": "1.0.0-beta.17",
+    "@tetherto/wdk-wallet-solana": "1.0.0-beta.13",
+    "@tetherto/wdk-wallet-ton": "1.0.0-beta.13"
   }
 }

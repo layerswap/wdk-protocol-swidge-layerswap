@@ -1,3 +1,6 @@
+export type LayerswapApiClient = import('./layerswap-api-client.js').default;
+export type LayerswapNetwork = import('./layerswap-api-client.js').LayerswapNetwork;
+export type LayerswapToken = import('./layerswap-api-client.js').LayerswapToken;
 /** @typedef {import('./layerswap-api-client.js').default} LayerswapApiClient */
 /** @typedef {import('./layerswap-api-client.js').LayerswapNetwork} LayerswapNetwork */
 /** @typedef {import('./layerswap-api-client.js').LayerswapToken} LayerswapToken */
@@ -8,7 +11,7 @@
  * @param {number | bigint} chainId
  * @returns {Promise<LayerswapNetwork>}
  */
-export function resolveSourceNetwork(client: LayerswapApiClient, chainId: number | bigint): Promise<LayerswapNetwork>;
+export declare function resolveSourceNetwork(client: LayerswapApiClient, chainId: number | bigint): Promise<LayerswapNetwork>;
 /**
  * Finds the Layerswap network by its identifier (network name).
  *
@@ -16,7 +19,7 @@ export function resolveSourceNetwork(client: LayerswapApiClient, chainId: number
  * @param {string} name
  * @returns {Promise<LayerswapNetwork>}
  */
-export function resolveNetworkByName(client: LayerswapApiClient, name: string): Promise<LayerswapNetwork>;
+export declare function resolveNetworkByName(client: LayerswapApiClient, name: string): Promise<LayerswapNetwork>;
 /**
  * Resolves a token within a network by either contract address (case-insensitive)
  * or Layerswap symbol. Returns the canonical token record.
@@ -25,7 +28,7 @@ export function resolveNetworkByName(client: LayerswapApiClient, name: string): 
  * @param {string} identifier - Contract address (0x…) or Layerswap symbol (e.g. 'USDC').
  * @returns {LayerswapToken}
  */
-export function resolveToken(network: LayerswapNetwork, identifier: string): LayerswapToken;
+export declare function resolveToken(network: LayerswapNetwork, identifier: string): LayerswapToken;
 /**
  * Converts a base-unit bigint amount to a decimal string with the given number of decimals.
  * Used to build Layerswap API request bodies, which expect decimal strings.
@@ -34,7 +37,7 @@ export function resolveToken(network: LayerswapNetwork, identifier: string): Lay
  * @param {number} decimals
  * @returns {string}
  */
-export function formatBaseUnits(baseUnits: bigint, decimals: number): string;
+export declare function formatBaseUnits(baseUnits: bigint, decimals: number): string;
 /**
  * Converts a decimal-string amount (as returned by Layerswap quotes) to a base-unit bigint.
  *
@@ -45,7 +48,4 @@ export function formatBaseUnits(baseUnits: bigint, decimals: number): string;
  * @param {number} decimals
  * @returns {bigint}
  */
-export function parseDecimal(value: number | string, decimals: number): bigint;
-export type LayerswapApiClient = import("./layerswap-api-client.js").default;
-export type LayerswapNetwork = import("./layerswap-api-client.js").LayerswapNetwork;
-export type LayerswapToken = import("./layerswap-api-client.js").LayerswapToken;
+export declare function parseDecimal(value: number | string, decimals: number): bigint;

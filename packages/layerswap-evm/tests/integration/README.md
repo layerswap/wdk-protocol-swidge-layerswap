@@ -4,10 +4,8 @@
 
 ## Prerequisites
 
-1. **Install the EVM wallet manager** (optional dev dep, not in default install):
-   ```bash
-   npm install --save-dev @tetherto/wdk-wallet-evm
-   ```
+1. **Install the workspace dependencies** with `pnpm install`. The EVM wallet
+   manager used by this script is already declared as a package dev dependency.
 
 2. **A funded testnet wallet** on the source chain. Faucets you can use:
    - **Sepolia ETH** — [sepoliafaucet.com](https://sepoliafaucet.com/), [alchemy.com/faucets/ethereum-sepolia](https://www.alchemy.com/faucets/ethereum-sepolia)
@@ -26,7 +24,7 @@ Required env vars:
 | --- | --- |
 | `LAYERSWAP_SEED` | `"cook voyage document eight skate token alien guide drink uncle term abuse"` |
 | `LAYERSWAP_SOURCE_RPC` | `https://eth-sepolia.g.alchemy.com/v2/YOUR_KEY` |
-| `LAYERSWAP_TARGET_CHAIN` | `ARBITRUM_SEPOLIA` (Layerswap network name) |
+| `LAYERSWAP_TARGET_CHAIN` | `OPTIMISM_SEPOLIA` (Layerswap network name; verify the live sandbox route first) |
 | `LAYERSWAP_SOURCE_TOKEN` | `ETH` (symbol) **or** `0xA0b8…48` (contract) |
 | `LAYERSWAP_AMOUNT` | `10000000000000000` (= 0.01 ETH in wei) |
 
@@ -52,7 +50,7 @@ Optional env vars:
 LAYERSWAP_DRY_RUN=1 \
 LAYERSWAP_SEED="your mnemonic..." \
 LAYERSWAP_SOURCE_RPC="https://eth-sepolia.g.alchemy.com/v2/YOUR_KEY" \
-LAYERSWAP_TARGET_CHAIN="ARBITRUM_SEPOLIA" \
+LAYERSWAP_TARGET_CHAIN="OPTIMISM_SEPOLIA" \
 LAYERSWAP_SOURCE_TOKEN="ETH" \
 LAYERSWAP_AMOUNT="10000000000000000" \
 node tests/integration/swidge-testnet.mjs
@@ -63,7 +61,7 @@ node tests/integration/swidge-testnet.mjs
 ```bash
 LAYERSWAP_SEED="your mnemonic..." \
 LAYERSWAP_SOURCE_RPC="https://eth-sepolia.g.alchemy.com/v2/YOUR_KEY" \
-LAYERSWAP_TARGET_CHAIN="ARBITRUM_SEPOLIA" \
+LAYERSWAP_TARGET_CHAIN="OPTIMISM_SEPOLIA" \
 LAYERSWAP_SOURCE_TOKEN="ETH" \
 LAYERSWAP_AMOUNT="10000000000000000" \
 node tests/integration/swidge-testnet.mjs
@@ -90,4 +88,4 @@ Match the source chain's `chain_id` to the value your RPC returns from `eth_chai
 
 ## Cleanup
 
-This script broadcasts irreversible (but cheap) testnet transactions. Inspect the deposit hash on a block explorer (Etherscan for Sepolia, Arbiscan for Arbitrum Sepolia) to confirm it was mined as expected.
+This script broadcasts irreversible (but cheap) testnet transactions. Inspect the deposit hash on the source network's block explorer and the payout hash on the destination network's explorer.

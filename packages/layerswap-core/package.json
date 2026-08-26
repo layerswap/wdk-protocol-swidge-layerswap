@@ -23,13 +23,14 @@
     "test:coverage": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --coverage"
   },
   "dependencies": {
-    "bare-node-runtime": "^1.1.4"
+    "bare-node-runtime": "^1.5.0"
   },
   "devDependencies": {
-    "cross-env": "10.0.0",
+    "@jest/globals": "30.4.1",
+    "cross-env": "10.1.0",
     "jest": "30.4.2",
     "standard": "17.1.2",
-    "typescript": "5.8.3"
+    "typescript": "7.0.2"
   },
   "exports": {
     ".": {

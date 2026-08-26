@@ -69,6 +69,9 @@ node --env-file=.env src/cli.mjs swidge
 3. Polls `protocol.getSwidgeStatus(id)` every `LAYERSWAP_POLL_INTERVAL_MS` until the swap reaches a terminal WDK status (`completed`, `failed`, `expired`, `cancelled`, `refunded`) or `LAYERSWAP_POLL_TIMEOUT_MS` elapses.
 4. On `completed`, prints the destination-chain output tx hash.
 
+For Bitcoin, `LAYERSWAP_BTC_FEE_RATE` can override the Blockbook fee estimate
+in sat/vB (for example, `2` on testnet).
+
 ### `status <swapId>` — single-shot poll
 
 ```bash
@@ -92,6 +95,7 @@ Fetches and pretty-prints the full `GET /swaps/<id>` envelope, followed by the W
 - **`Token '…' not supported on Layerswap network '…'`** — symbol/contract mismatch. Use the exact symbol Layerswap publishes (visible via `networks`).
 - **`Exceeded maximum fee cost for bridge operation.`** — your `LAYERSWAP_BRIDGE_MAX_FEE` (if you set one) is below the live quote's `total_fee` in source-token base units.
 - **HTTP 401/403 on sandbox** — try `LAYERSWAP_API_KEY=sandbox`; some Layerswap dev environments inspect the header even though it's not strictly required.
+- **HTTP 403 `API_KEY_FORBIDDEN` on production** — set `LAYERSWAP_API_KEY=""` to omit the sandbox key, or provide a valid production key.
 
 ## Updating the package under test
 

@@ -1,3 +1,82 @@
+import { SwidgeProtocol } from '@tetherto/wdk-wallet/protocols';
+import LayerswapApiClient from '@layerswap/wdk-protocol-swidge-layerswap-core';
+export type SwidgeProtocolConfig = import('@tetherto/wdk-wallet/protocols').SwidgeProtocolConfig;
+export type SwidgeOptions = import('@tetherto/wdk-wallet/protocols').SwidgeOptions;
+export type SwidgeQuote = import('@tetherto/wdk-wallet/protocols').SwidgeQuote;
+export type SwidgeResult = import('@tetherto/wdk-wallet/protocols').SwidgeResult;
+export type SwidgeFee = import('@tetherto/wdk-wallet/protocols').SwidgeFee;
+export type SwidgeStatusOptions = import('@tetherto/wdk-wallet/protocols').SwidgeStatusOptions;
+export type SwidgeStatusResult = import('@tetherto/wdk-wallet/protocols').SwidgeStatusResult;
+export type SwidgeSupportedChain = import('@tetherto/wdk-wallet/protocols').SwidgeSupportedChain;
+export type SwidgeSupportedToken = import('@tetherto/wdk-wallet/protocols').SwidgeSupportedToken;
+export type SwidgeSupportedTokensOptions = import('@tetherto/wdk-wallet/protocols').SwidgeSupportedTokensOptions;
+export type BridgeResult = import('@tetherto/wdk-wallet/protocols').BridgeResult;
+export type WalletAccountEvm = import('@tetherto/wdk-wallet-evm').WalletAccountEvm;
+export type WalletAccountReadOnlyEvm = import('@tetherto/wdk-wallet-evm').WalletAccountReadOnlyEvm;
+export type WalletAccountEvmErc4337 = import('@tetherto/wdk-wallet-evm-erc-4337').WalletAccountEvmErc4337;
+export type WalletAccountReadOnlyEvmErc4337 = import('@tetherto/wdk-wallet-evm-erc-4337').WalletAccountReadOnlyEvmErc4337;
+export type EvmErc4337WalletPaymasterTokenConfig = import('@tetherto/wdk-wallet-evm-erc-4337').EvmErc4337WalletPaymasterTokenConfig;
+export type EvmErc4337WalletSponsorshipPolicyConfig = import('@tetherto/wdk-wallet-evm-erc-4337').EvmErc4337WalletSponsorshipPolicyConfig;
+export type EvmErc4337WalletNativeCoinsConfig = import('@tetherto/wdk-wallet-evm-erc-4337').EvmErc4337WalletNativeCoinsConfig;
+export type LayerswapNetwork = import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapNetwork;
+export type LayerswapToken = import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapToken;
+export type LayerswapDepositAction = import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapDepositAction;
+export type LayerswapSwap = import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapSwap;
+export type LayerswapQuote = import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapQuote;
+export type LayerswapProtocolConfig = SwidgeProtocolConfig & Object;
+export type LayerswapSwidgeOptions = SwidgeOptions & Object;
+export type BridgeOptions = {
+    /**
+     * - Layerswap destination network name. Uses the
+     *   `<CHAIN>_<ENV>` uppercase convention, e.g.
+     *   `'ETHEREUM_MAINNET'`, `'ARBITRUM_MAINNET'`,
+     *   `'ARBITRUM_SEPOLIA'`. Matching is case-insensitive
+     *   but the canonical form is uppercase.
+     */
+    targetChain: string;
+    /**
+     * - Destination-chain recipient address, in the
+     *   destination chain's native format (Layerswap is
+     *   HTTP-orchestrated and accepts the native string).
+     */
+    recipient: string;
+    /**
+     * - Source token: contract address (0x…) OR Layerswap symbol.
+     */
+    token: string;
+    /**
+     * - Source amount in base units (e.g., wei for ETH).
+     */
+    amount: number | bigint;
+    /**
+     * - Destination token (address or symbol). Defaults to the
+     *         source token's symbol.
+     */
+    destinationToken?: string;
+    /**
+     * - Override auto-detected source network name.
+     */
+    sourceChain?: string;
+    /**
+     * - Request a native-gas drop on the destination chain.
+     */
+    refuel?: boolean;
+    /**
+     * - Slippage tolerance percentage, e.g. '0.5'.
+     */
+    slippage?: string;
+    /**
+     * - External reference id for the created swap.
+     */
+    referenceId?: string;
+    /**
+     * - Refund address used if the swap fails after deposit.
+     */
+    refundAddress?: string;
+};
+export type LayerswapBridgeResult = BridgeResult & {
+    swapId: string;
+};
 /** @typedef {import('@tetherto/wdk-wallet/protocols').SwidgeProtocolConfig} SwidgeProtocolConfig */
 /** @typedef {import('@tetherto/wdk-wallet/protocols').SwidgeOptions} SwidgeOptions */
 /** @typedef {import('@tetherto/wdk-wallet/protocols').SwidgeQuote} SwidgeQuote */
@@ -92,41 +171,20 @@
  */
 export default class LayerswapProtocolEvm extends SwidgeProtocol {
     /**
-     * Creates a new swidge protocol for chain/token discovery only, without a wallet account.
-     *
-     * @overload
-     * @param {undefined} [account] - No account; only discovery and `fromChain`-scoped quotes work.
-     * @param {LayerswapProtocolConfig} [config] - The layerswap protocol configuration.
-     */
-    constructor(account?: undefined, config?: LayerswapProtocolConfig);
-    /**
-     * Creates a new read-only interface to the layerswap protocol for evm blockchains.
-     *
-     * @overload
-     * @param {WalletAccountReadOnlyEvm | WalletAccountReadOnlyEvmErc4337} account - The wallet account to use to interact with the protocol.
-     * @param {LayerswapProtocolConfig} [config] - The layerswap protocol configuration.
-     */
-    constructor(account: WalletAccountReadOnlyEvm | WalletAccountReadOnlyEvmErc4337, config?: LayerswapProtocolConfig);
-    /**
-     * Creates a new interface to the layerswap protocol for evm blockchains.
-     *
-     * @overload
-     * @param {WalletAccountEvm | WalletAccountEvmErc4337} account - The wallet account to use to interact with the protocol.
-     * @param {LayerswapProtocolConfig} [config] - The layerswap protocol configuration.
-     */
-    constructor(account: WalletAccountEvm | WalletAccountEvmErc4337, config?: LayerswapProtocolConfig);
-    /**
      * @private
      * @type {LayerswapApiClient}
      */
-    private _client;
+    _client;
     /** @private */
-    private _provider;
+    _provider;
     /**
      * @private
      * @type {bigint | undefined}
      */
-    private _chainId;
+    _chainId;
+    constructor(account?: undefined, config?: LayerswapProtocolConfig);
+    constructor(account: WalletAccountReadOnlyEvm | WalletAccountReadOnlyEvmErc4337, config?: LayerswapProtocolConfig);
+    constructor(account: WalletAccountEvm | WalletAccountEvmErc4337, config?: LayerswapProtocolConfig);
     /**
      * Quotes the estimated costs and output of a Layerswap swidge operation without
      * creating a swap. Layerswap only supports exact-in operations; passing
@@ -153,7 +211,7 @@ export default class LayerswapProtocolEvm extends SwidgeProtocol {
      * @returns {Promise<SwidgeResult>} The swidge execution result. `id` is the Layerswap swap
      *   id (use it with `getSwidgeStatus`); `hash` is the source-chain deposit transaction hash.
      */
-    swidge(options: LayerswapSwidgeOptions, config?: SwidgeProtocolConfig & Partial<EvmErc4337WalletPaymasterTokenConfig | EvmErc4337WalletSponsorshipPolicyConfig | EvmErc4337WalletNativeCoinsConfig> & Pick<LayerswapProtocolConfig, "bridgeMaxFee">): Promise<SwidgeResult>;
+    swidge(options: LayerswapSwidgeOptions, config?: SwidgeProtocolConfig & Partial<EvmErc4337WalletPaymasterTokenConfig | EvmErc4337WalletSponsorshipPolicyConfig | EvmErc4337WalletNativeCoinsConfig> & Pick<LayerswapProtocolConfig, 'bridgeMaxFee'>): Promise<SwidgeResult>;
     /**
      * Retrieves the current status of a Layerswap swap, mapped to the WDK swidge
      * status vocabulary, along with the source/destination/refund transactions
@@ -167,6 +225,21 @@ export default class LayerswapProtocolEvm extends SwidgeProtocol {
      * @throws {Error} If no swap exists with the given id.
      */
     getSwidgeStatus(id: string): Promise<SwidgeStatusResult>;
+    /**
+     * Retrieves the chains supported by Layerswap.
+     *
+     * @returns {Promise<SwidgeSupportedChain[]>} The supported chains. `id` is the Layerswap
+     *   network name (e.g. `'ETHEREUM_MAINNET'`) — use it as `fromChain`/`toChain`.
+     */
+    getSupportedChains(): Promise<SwidgeSupportedChain[]>;
+    /**
+     * Retrieves the tokens supported by Layerswap, optionally scoped to a chain.
+     *
+     * @param {SwidgeSupportedTokensOptions} [options] - Chain-scoped filters (`toChain`,
+     *   or `fromChain` when `toChain` is absent). `fromToken` route scoping is not applied.
+     * @returns {Promise<SwidgeSupportedToken[]>} The supported tokens.
+     */
+    getSupportedTokens(options?: SwidgeSupportedTokensOptions): Promise<SwidgeSupportedToken[]>;
     /**
      * Bridges a token to a different blockchain via Layerswap.
      *
@@ -185,7 +258,7 @@ export default class LayerswapProtocolEvm extends SwidgeProtocol {
      *   override its configuration options along with the 'bridgeMaxFee' option.
      * @returns {Promise<LayerswapBridgeResult>} The bridge's result, augmented with the Layerswap swap id.
      */
-    bridge(options: BridgeOptions, config?: Partial<EvmErc4337WalletPaymasterTokenConfig | EvmErc4337WalletSponsorshipPolicyConfig | EvmErc4337WalletNativeCoinsConfig> & Pick<LayerswapProtocolConfig, "bridgeMaxFee">): Promise<LayerswapBridgeResult>;
+    bridge(options: BridgeOptions, config?: Partial<EvmErc4337WalletPaymasterTokenConfig | EvmErc4337WalletSponsorshipPolicyConfig | EvmErc4337WalletNativeCoinsConfig> & Pick<LayerswapProtocolConfig, 'bridgeMaxFee'>): Promise<LayerswapBridgeResult>;
     /**
      * Quotes the costs of a Layerswap bridge operation without creating a swap.
      *
@@ -196,7 +269,7 @@ export default class LayerswapProtocolEvm extends SwidgeProtocol {
      * @param {BridgeOptions} options - The bridge's options.
      * @returns {Promise<Omit<BridgeResult, 'hash'>>} The bridge's quotes.
      */
-    quoteBridge(options: BridgeOptions): Promise<Omit<BridgeResult, "hash">>;
+    quoteBridge(options: BridgeOptions): Promise<Omit<BridgeResult, 'hash'>>;
     /**
      * Returns the underlying API client, for raw access to the Layerswap v2 API.
      *
@@ -218,7 +291,7 @@ export default class LayerswapProtocolEvm extends SwidgeProtocol {
      */
     getTransactionStatus(txHash: string, options?: {
         sourceChain?: string;
-    }): Promise<import("@layerswap/wdk-protocol-swidge-layerswap-core").LayerswapTransactionStatus>;
+    }): Promise<import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapTransactionStatus>;
     /**
      * Maps the legacy bridge options onto the swidge options vocabulary. The legacy
      * `slippage` is a percent string ('0.5' = 0.5%); swidge takes a decimal (0.005).
@@ -369,85 +442,3 @@ export default class LayerswapProtocolEvm extends SwidgeProtocol {
      */
     private _notifyDepositBroadcast;
 }
-export type SwidgeProtocolConfig = import("@tetherto/wdk-wallet/protocols").SwidgeProtocolConfig;
-export type SwidgeOptions = import("@tetherto/wdk-wallet/protocols").SwidgeOptions;
-export type SwidgeQuote = import("@tetherto/wdk-wallet/protocols").SwidgeQuote;
-export type SwidgeResult = import("@tetherto/wdk-wallet/protocols").SwidgeResult;
-export type SwidgeFee = import("@tetherto/wdk-wallet/protocols").SwidgeFee;
-export type SwidgeStatusOptions = import("@tetherto/wdk-wallet/protocols").SwidgeStatusOptions;
-export type SwidgeStatusResult = import("@tetherto/wdk-wallet/protocols").SwidgeStatusResult;
-export type SwidgeSupportedChain = import("@tetherto/wdk-wallet/protocols").SwidgeSupportedChain;
-export type SwidgeSupportedToken = import("@tetherto/wdk-wallet/protocols").SwidgeSupportedToken;
-export type SwidgeSupportedTokensOptions = import("@tetherto/wdk-wallet/protocols").SwidgeSupportedTokensOptions;
-export type BridgeResult = import("@tetherto/wdk-wallet/protocols").BridgeResult;
-export type WalletAccountEvm = import("@tetherto/wdk-wallet-evm").WalletAccountEvm;
-export type WalletAccountReadOnlyEvm = import("@tetherto/wdk-wallet-evm").WalletAccountReadOnlyEvm;
-export type WalletAccountEvmErc4337 = import("@tetherto/wdk-wallet-evm-erc-4337").WalletAccountEvmErc4337;
-export type WalletAccountReadOnlyEvmErc4337 = import("@tetherto/wdk-wallet-evm-erc-4337").WalletAccountReadOnlyEvmErc4337;
-export type EvmErc4337WalletPaymasterTokenConfig = import("@tetherto/wdk-wallet-evm-erc-4337").EvmErc4337WalletPaymasterTokenConfig;
-export type EvmErc4337WalletSponsorshipPolicyConfig = import("@tetherto/wdk-wallet-evm-erc-4337").EvmErc4337WalletSponsorshipPolicyConfig;
-export type EvmErc4337WalletNativeCoinsConfig = import("@tetherto/wdk-wallet-evm-erc-4337").EvmErc4337WalletNativeCoinsConfig;
-export type LayerswapNetwork = import("@layerswap/wdk-protocol-swidge-layerswap-core").LayerswapNetwork;
-export type LayerswapToken = import("@layerswap/wdk-protocol-swidge-layerswap-core").LayerswapToken;
-export type LayerswapDepositAction = import("@layerswap/wdk-protocol-swidge-layerswap-core").LayerswapDepositAction;
-export type LayerswapSwap = import("@layerswap/wdk-protocol-swidge-layerswap-core").LayerswapSwap;
-export type LayerswapQuote = import("@layerswap/wdk-protocol-swidge-layerswap-core").LayerswapQuote;
-export type LayerswapProtocolConfig = SwidgeProtocolConfig & any;
-/**
- * Layerswap-specific extensions to the WDK swidge options.
- */
-export type LayerswapSwidgeOptions = SwidgeOptions & any;
-export type BridgeOptions = {
-    /**
-     * - Layerswap destination network name. Uses the
-     *   `<CHAIN>_<ENV>` uppercase convention, e.g.
-     *   `'ETHEREUM_MAINNET'`, `'ARBITRUM_MAINNET'`,
-     *   `'ARBITRUM_SEPOLIA'`. Matching is case-insensitive
-     *   but the canonical form is uppercase.
-     */
-    targetChain: string;
-    /**
-     * - Destination-chain recipient address, in the
-     *   destination chain's native format (Layerswap is
-     *   HTTP-orchestrated and accepts the native string).
-     */
-    recipient: string;
-    /**
-     * - Source token: contract address (0x…) OR Layerswap symbol.
-     */
-    token: string;
-    /**
-     * - Source amount in base units (e.g., wei for ETH).
-     */
-    amount: number | bigint;
-    /**
-     * - Destination token (address or symbol). Defaults to the
-     *         source token's symbol.
-     */
-    destinationToken?: string;
-    /**
-     * - Override auto-detected source network name.
-     */
-    sourceChain?: string;
-    /**
-     * - Request a native-gas drop on the destination chain.
-     */
-    refuel?: boolean;
-    /**
-     * - Slippage tolerance percentage, e.g. '0.5'.
-     */
-    slippage?: string;
-    /**
-     * - External reference id for the created swap.
-     */
-    referenceId?: string;
-    /**
-     * - Refund address used if the swap fails after deposit.
-     */
-    refundAddress?: string;
-};
-export type LayerswapBridgeResult = BridgeResult & {
-    swapId: string;
-};
-import { SwidgeProtocol } from '@tetherto/wdk-wallet/protocols';
-import LayerswapApiClient from '@layerswap/wdk-protocol-swidge-layerswap-core';

@@ -1,6 +1,6 @@
 # Agent Guide
 
-This repository is the Layerswap analog of the Tether WDK (Wallet Development Kit) swidge protocol packages — it extends `SwidgeProtocol` from `@tetherto/wdk-wallet/protocols` (>= 1.0.0-beta.16) so a WDK EVM wallet account can swap and bridge tokens across chains via the Layerswap public API. The legacy `bridge`/`quoteBridge` surface is kept as thin adapters over `swidge`/`quoteSwidge`.
+This repository is the Layerswap analog of the Tether WDK (Wallet Development Kit) swidge protocol packages — it extends `SwidgeProtocol` from `@tetherto/wdk-wallet/protocols` (>= 1.0.0-beta.17) so a WDK EVM wallet account can swap and bridge tokens across chains via the Layerswap public API. The legacy `bridge`/`quoteBridge` surface is kept as thin adapters over `swidge`/`quoteSwidge`.
 
 ## Project Overview
 - **Architecture:** Single `LayerswapProtocolEvm` class. The chain-agnostic HTTP client (`LayerswapApiClient`) and the network/token/decimal helpers live in the sibling package `@layerswap/wdk-protocol-swidge-layerswap-core` and are imported from there — do not duplicate them here.

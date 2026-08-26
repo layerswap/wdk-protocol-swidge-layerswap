@@ -126,7 +126,8 @@ function buildSwidgeOptions (cfg, address) {
     toChain: cfg.targetChain,
     fromChain: cfg.sourceChainOverride,
     recipient: cfg.recipient ?? address,
-    fromTokenAmount: BigInt(cfg.amountStr)
+    fromTokenAmount: BigInt(cfg.amountStr),
+    ...(cfg.btcFeeRate ? { feeRate: BigInt(cfg.btcFeeRate) } : {})
   }
 }
 
@@ -182,6 +183,7 @@ async function cmdQuote (vm) {
   console.log('  from token      :', options.fromToken)
   console.log('  to token        :', options.toToken ?? '(= source symbol)')
   console.log('  amount (base)   :', options.fromTokenAmount.toString())
+  if (options.feeRate !== undefined) console.log('  BTC fee rate    :', `${options.feeRate} sat/vB`)
   console.log()
 
   const quote = await protocol.quoteSwidge(options)
@@ -214,6 +216,7 @@ async function cmdSwidge (vm) {
   console.log('  to chain        :', options.toChain)
   console.log('  from token      :', options.fromToken)
   console.log('  amount (base)   :', options.fromTokenAmount.toString())
+  if (options.feeRate !== undefined) console.log('  BTC fee rate    :', `${options.feeRate} sat/vB`)
   console.log()
 
   console.log('>> quoteSwidge…')

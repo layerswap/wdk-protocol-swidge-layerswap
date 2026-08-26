@@ -1,6 +1,6 @@
 # Agent Guide
 
-This repository is a monorepo of WDK Swidge (swap + bridge) modules for the Layerswap protocol. It follows the conventions established by the Tether WDK (Wallet Development Kit) ecosystem — each package extends `SwidgeProtocol` from `@tetherto/wdk-wallet/protocols` (>= 1.0.0-beta.16) for a specific source-VM family, implementing `quoteSwidge` / `swidge` / `getSwidgeStatus` / `getSupportedChains` / `getSupportedTokens`. The legacy bridge-module surface (`bridge`/`quoteBridge`) is kept as thin adapters over `swidge` for backwards compatibility, and the base class derives `swap`/`quoteSwap` automatically.
+This repository is a monorepo of WDK Swidge (swap + bridge) modules for the Layerswap protocol. It follows the conventions established by the Tether WDK (Wallet Development Kit) ecosystem — each package extends `SwidgeProtocol` from `@tetherto/wdk-wallet/protocols` (>= 1.0.0-beta.17) for a specific source-VM family, implementing `quoteSwidge` / `swidge` / `getSwidgeStatus` / `getSupportedChains` / `getSupportedTokens`. The legacy bridge-module surface (`bridge`/`quoteBridge`) is kept as thin adapters over `swidge` for backwards compatibility, and the base class derives `swap`/`quoteSwap` automatically.
 
 ## Repository shape
 

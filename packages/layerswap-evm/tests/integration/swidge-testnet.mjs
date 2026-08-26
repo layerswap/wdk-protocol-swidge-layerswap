@@ -14,7 +14,7 @@
 // Required env vars:
 //   LAYERSWAP_SEED              BIP-39 mnemonic for the source-chain wallet.
 //   LAYERSWAP_SOURCE_RPC        JSON-RPC URL for the source chain (e.g. Sepolia).
-//   LAYERSWAP_TARGET_CHAIN      Layerswap destination network name (e.g. 'ARBITRUM_SEPOLIA').
+//   LAYERSWAP_TARGET_CHAIN      Layerswap destination network name (e.g. 'OPTIMISM_SEPOLIA').
 //                                Uses the <CHAIN>_<ENV> uppercase convention.
 //   LAYERSWAP_SOURCE_TOKEN      Source token: contract address (0x…) or symbol ('ETH', 'USDC').
 //   LAYERSWAP_AMOUNT            Amount in source-token base units (e.g. '10000000000000000' for 0.01 ETH).
@@ -98,7 +98,9 @@ async function main () {
   console.log('Dry run          :', dryRun)
 
   const wallet = new WalletManagerEvm(seed, { provider: sourceRpc })
-  const account = await wallet.getAccount(derivationPath)
+  const account = typeof wallet.getAccountByPath === 'function'
+    ? await wallet.getAccountByPath(derivationPath)
+    : await wallet.getAccount(derivationPath)
   const address = await account.getAddress()
   console.log('Source address   :', address)
 

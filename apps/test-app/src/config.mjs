@@ -15,11 +15,14 @@ export function optional (name, fallback) {
 }
 
 export function loadConfig () {
-  const apiKeyRaw = optional('LAYERSWAP_API_KEY', 'sandbox')
+  const apiKeyRaw = process.env.LAYERSWAP_API_KEY
 
   return {
     apiUrl: optional('LAYERSWAP_API_URL', 'https://api-dev.layerswap.cloud'),
-    apiKey: apiKeyRaw.length > 0 ? apiKeyRaw : undefined,
+    // Default to the sandbox key only when the variable is absent. An explicitly
+    // empty value omits X-LS-APIKEY, which the public production API requires;
+    // sending the literal sandbox key to production returns API_KEY_FORBIDDEN.
+    apiKey: apiKeyRaw === undefined ? 'sandbox' : (apiKeyRaw || undefined),
     sourceRpc: process.env.LAYERSWAP_SOURCE_RPC,
     seed: process.env.LAYERSWAP_SEED,
     derivationPath: optional('LAYERSWAP_DERIVATION_PATH', "0'/0/0"),
@@ -29,6 +32,7 @@ export function loadConfig () {
     amountStr: process.env.LAYERSWAP_AMOUNT,
     recipient: process.env.LAYERSWAP_RECIPIENT,
     sourceChainOverride: process.env.LAYERSWAP_SOURCE_CHAIN,
+    btcFeeRate: process.env.LAYERSWAP_BTC_FEE_RATE,
     pollIntervalMs: Number(optional('LAYERSWAP_POLL_INTERVAL_MS', '10000')),
     pollTimeoutMs: Number(optional('LAYERSWAP_POLL_TIMEOUT_MS', '900000'))
   }
