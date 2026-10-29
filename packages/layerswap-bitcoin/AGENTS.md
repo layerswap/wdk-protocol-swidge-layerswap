@@ -55,13 +55,13 @@ The `ISwidgeProtocol` throw contract is implemented once in core. Bitcoin-specif
 
 - dust-limit amount → `ValueError`; non-native source token → `InvalidTokenError`;
 - no / insufficient UTXOs (incl. after the OP_RETURN overhead) → `SwidgeError` `INSUFFICIENT_BALANCE` (→ `BridgeError` through `bridge`);
-- missing `to_address`, malformed or oversized `call_data` memo → `ProviderError` (`INTERNAL_SERVER_ERROR`);
+- missing or malformed `to_address` (incl. an address of another network), malformed or oversized `call_data` memo → `ProviderError` (`INTERNAL_SERVER_ERROR`), checked before anything is signed;
 - bitcoin client failures (`_ensureConnected`, `estimateFee`, `listUnspent`, `getTransaction`, `broadcast`) go through core's `_callWallet` / `normalizeWalletError` → `ProviderError`;
 - `WalletAccountBtc.dispose()` sets `_masterNode` to `undefined` while keeping `_account`, so a full account without a master node is treated as disposed (`DisposalError`); read-only accounts (no `_account`) → `AccountRequiredError`.
 
 ## `call_data` encoding (matches Layerswap UI)
 
-Layerswap returns the swap reference id as a numeric string in `call_data`. The Layerswap web app converts it with `Number(callData).toString(16)` and stores the resulting hex string as the `OP_RETURN` payload bytes (`Buffer.from(hex, 'hex')`). We mirror that exactly. Bitcoin OP_RETURN payloads are capped at 80 bytes — we throw if `call_data` would overflow.
+Layerswap returns the swap reference id in `call_data` as a numeric sequence, optionally followed by a `;`-separated tail. Like the Layerswap web app (`packages/wallets/adapters/bitcoin/src/transferProvider/sendTransaction.ts`), the sequence is hex-encoded via `BigInt(seq).toString(16)` (not `Number`, which loses precision above 2^53), the tail (`;` included) is appended verbatim, and the resulting string is stored as **UTF-8 bytes** in the `OP_RETURN` payload. Bitcoin OP_RETURN payloads are capped at 80 bytes — we throw a `ProviderError` if `call_data` would overflow. `tests/fixtures/RESEARCH-NOTES.md` records the earlier `Number(...)` form observed during research.
 
 ## Semantic notes
 

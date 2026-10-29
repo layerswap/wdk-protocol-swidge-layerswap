@@ -411,6 +411,17 @@ describe('LayerswapProtocolTon', () => {
       expect(result.fees.at(-1)).toEqual({ type: 'network', amount: 12_345_000n, token: 'TON', chain: 'TON_MAINNET', included: false, description: 'Source-chain gas' })
     })
 
+    test('omits the source-chain gas entry when the wallet reports no fee', async () => {
+      useSwapHandlers()
+      const account = makeAccount()
+      account.sendTransaction.mockResolvedValue({ hash: 'tonhash-deadbeef' })
+
+      const result = await new LayerswapProtocolTon(account).swidge(JETTON_SWIDGE_OPTIONS)
+
+      expect(result.hash).toBe('tonhash-deadbeef')
+      expect(result.fees.some((fee) => fee.description === 'Source-chain gas')).toBe(false)
+    })
+
     test('bridge happy path returns the deposit hash, gas fee, Layerswap fee and swap id', async () => {
       useSwapHandlers()
 

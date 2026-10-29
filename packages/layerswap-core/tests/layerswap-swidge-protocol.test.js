@@ -636,10 +636,17 @@ describe('LayerswapSwidgeProtocol', () => {
       expect(tokens.map((token) => token.symbol)).toEqual(['USDC', 'NATIVE'])
     })
 
-    test('getSupportedChains surfaces Layerswap failures as ProviderError', async () => {
-      server.use(layerswapApi.error('get', '/api/v2/networks', 500))
+    test.each([
+      ['getSupportedChains', 400],
+      ['getSupportedChains', 429],
+      ['getSupportedChains', 500],
+      ['getSupportedTokens', 400],
+      ['getSupportedTokens', 429],
+      ['getSupportedTokens', 500]
+    ])('%s surfaces a Layerswap HTTP %i as a ProviderError (the only error its contract allows)', async (method, status) => {
+      server.use(layerswapApi.error('get', '/api/v2/networks', status))
 
-      await expect(new TestProtocol(undefined).getSupportedChains()).rejects.toThrow(ProviderError)
+      await expect(new TestProtocol(undefined)[method]()).rejects.toThrow(ProviderError)
     })
   })
 

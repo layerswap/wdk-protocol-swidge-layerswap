@@ -103,8 +103,9 @@ export type LayerswapBitcoinSignedPsbt = {
  * deposit is built as a PSBT client-side via `bitcoinjs-lib`:
  *      - Inputs: UTXOs selected with `@bitcoinerlab/coinselect`, factoring the OP_RETURN overhead.
  *      - Output #0: deposit address + value (satoshis).
- *      - Output #1: `OP_RETURN` carrying the swap reference (hex of `Number(callData).toString(16)`,
- *        stored as UTF-8 bytes — matches the Layerswap web app exactly).
+ *      - Output #1: `OP_RETURN` carrying the swap reference (the numeric sequence hex-encoded via
+ *        `BigInt(seq).toString(16)`, any `;` tail appended verbatim, stored as UTF-8 bytes —
+ *        matches the Layerswap web app exactly).
  *      - Output #2: change to sender if above the dust limit.
  * It is then signed with `psbt.signInputHD(idx, account._masterNode)`, finalized and
  * broadcast via `account._client.broadcast(hex)`.
@@ -206,6 +207,15 @@ export default class LayerswapProtocolBitcoin extends LayerswapSwidgeProtocol<La
      * @returns {LayerswapBitcoinSwidgeOptions} The swidge options.
      */
     protected _toSwidgeOptions(options: LayerswapBitcoinBridgeOptions): LayerswapBitcoinSwidgeOptions;
+    /**
+     * Checks that the Layerswap deposit address is a valid address on the account's network.
+     *
+     * @private
+     * @param {string} depositAddress - The Layerswap deposit address.
+     * @returns {Promise<void>}
+     * @throws {ProviderError} If Layerswap returned a malformed address, or one of another network.
+     */
+    private _assertDepositAddress;
     /**
      * Encodes Layerswap's numeric `call_data` reference into the UTF-8-of-hex form the
      * Layerswap web app uses for OP_RETURN. Throws if the payload would exceed the

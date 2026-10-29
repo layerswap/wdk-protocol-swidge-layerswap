@@ -191,6 +191,17 @@ export default class LayerswapProtocolEvm extends LayerswapSwidgeProtocol<Layers
      */
     private _getChainId;
     /**
+     * Parses the call data of a Layerswap deposit action. An erc-20 deposit is a call to the
+     * token contract, so it cannot be sent without call data; a native deposit may have none.
+     *
+     * @private
+     * @param {unknown} callData - The call data of the deposit action.
+     * @param {boolean} isErc20 - True if the source token is an erc-20 token.
+     * @returns {string} The call data (`'0x'` when a native deposit has none).
+     * @throws {ProviderError} If the call data is malformed, or missing for an erc-20 deposit.
+     */
+    private _parseCallData;
+    /**
      * @private
      * @param {LayerswapToken} token - The token.
      * @returns {boolean} True if the token is an erc-20 token (has a contract address).

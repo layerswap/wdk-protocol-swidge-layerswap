@@ -165,6 +165,7 @@ describe('LayerswapApiClient', () => {
     test.each([
       [401, ProviderErrorReason.UNAUTHORIZED],
       [403, ProviderErrorReason.FORBIDDEN],
+      [429, ProviderErrorReason.NETWORK_ERROR],
       [504, ProviderErrorReason.REQUEST_TIMEOUT],
       [500, ProviderErrorReason.INTERNAL_SERVER_ERROR],
       [503, ProviderErrorReason.INTERNAL_SERVER_ERROR]
@@ -177,6 +178,27 @@ describe('LayerswapApiClient', () => {
       expect(error).toBeInstanceOf(ProviderError)
       expect(error.reason).toBe(reason)
       expect(error.status).toBe(status)
+    })
+
+    test('maps a 4xx response to the parameterless network catalog to a ProviderError', async () => {
+      server.use(http.get(`${API_URL}/api/v2/networks`, () =>
+        HttpResponse.json({ error: { code: 'BAD_REQUEST', message: 'boom' } }, { status: 400 })))
+
+      const error = await new LayerswapApiClient().getNetworks().catch((err) => err)
+
+      expect(error).toBeInstanceOf(ProviderError)
+      expect(error.reason).toBe(ProviderErrorReason.INTERNAL_SERVER_ERROR)
+      expect(error.status).toBe(400)
+    })
+
+    test('maps a rate-limited request to a ProviderError even when it carries caller input', async () => {
+      server.use(http.post(`${API_URL}/api/v2/swaps`, () =>
+        HttpResponse.json({ error: { code: 'TOO_MANY_REQUESTS', message: 'slow down' } }, { status: 429 })))
+
+      const error = await new LayerswapApiClient().createSwap({}).catch((err) => err)
+
+      expect(error).toBeInstanceOf(ProviderError)
+      expect(error.reason).toBe(ProviderErrorReason.NETWORK_ERROR)
     })
 
     test('maps a network failure to a ProviderError with reason NETWORK_ERROR', async () => {

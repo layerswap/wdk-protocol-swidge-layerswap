@@ -348,6 +348,18 @@ describe('LayerswapProtocolBitcoin', () => {
       await expect(new LayerswapProtocolBitcoin(makeAccount().account).swidge(SWIDGE_OPTIONS)).rejects.toThrow(ProviderError)
     })
 
+    test.each([
+      ['malformed', 'not-a-bitcoin-address'],
+      ['testnet', payments.p2wpkh({ hash: Buffer.alloc(20, 1), network: networks.testnet }).address]
+    ])('throws a ProviderError, without broadcasting, when the deposit address is %s', async (_, depositAddress) => {
+      useSwapHandlers(depositAction({ depositAddress }))
+      const { account, broadcast } = makeAccount()
+
+      await expect(new LayerswapProtocolBitcoin(account).swidge(SWIDGE_OPTIONS))
+        .rejects.toThrow(`Layerswap returned a malformed Bitcoin deposit address '${depositAddress}'.`)
+      expect(broadcast).not.toHaveBeenCalled()
+    })
+
     test('throws an InvalidTokenError for a non-native source token, before creating a swap', async () => {
       const networksWithToken = [
         { ...BITCOIN_MAINNET, tokens: [...BITCOIN_TOKENS, { symbol: 'ORDI', contract: 'brc20-ordi', decimals: 18 }] },

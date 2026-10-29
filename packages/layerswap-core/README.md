@@ -5,7 +5,7 @@ Chain-agnostic building blocks for the Layerswap WDK Swidge packages. This packa
 ## What's in here
 
 - `LayerswapApiClient` — minimal `fetch`-based wrapper over the Layerswap public v2 API (`/api/v2/networks`, `/api/v2/quote`, `/api/v2/swaps`, `/api/v2/swaps/{id}`, `/api/v2/swaps/{id}/deposit_speedup`, `/api/v2/transaction_status`). Caches `getNetworks()` per instance. Failed requests are thrown as WDK errors decorated with Layerswap's error `code` and the HTTP `status`:
-  - `ProviderError` — network failure (`NETWORK_ERROR`), timeout (`REQUEST_TIMEOUT`), 401/403 (`UNAUTHORIZED`/`FORBIDDEN`), 5xx or malformed body (`INTERNAL_SERVER_ERROR`);
+  - `ProviderError` — network failure or 429 rate limit (`NETWORK_ERROR`), timeout (`REQUEST_TIMEOUT`), 401/403 (`UNAUTHORIZED`/`FORBIDDEN`), 5xx, malformed body, or any 4xx on the parameterless `getNetworks()` (`INTERNAL_SERVER_ERROR`) — so discovery methods only ever throw `ProviderError`, as their `ISwidgeProtocol` contract requires;
   - `NoSuchElementError` — 404 on a looked-up swap or transaction;
   - `ValueError` — any other 4xx (Layerswap rejected the request parameters).
 - `resolveSourceNetwork(client, chainId)` — finds the `LayerswapNetwork` whose `chain_id` string-matches the supplied id. Works for any VM (EVM numeric ids, Solana cluster names, etc.).

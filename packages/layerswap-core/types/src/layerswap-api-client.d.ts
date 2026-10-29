@@ -149,6 +149,12 @@ export type LayerswapRequestOptions = {
      * instead of a `ValueError`.
      */
     notFoundAsNoSuchElement?: boolean;
+    /**
+     * - If true, a 4xx response is thrown as a
+     * `ProviderError` instead of a `ValueError`. Set for requests that carry no caller input, which
+     * therefore cannot be rejected for invalid parameters.
+     */
+    clientErrorAsProviderError?: boolean;
 };
 export type LayerswapApiClientConfig = {
     apiKey?: string;
@@ -316,6 +322,9 @@ export type LayerswapApiClientConfig = {
  * @property {boolean} [notFoundAsNoSuchElement] - If true, a "not found" response (a 404, or a
  *   400 whose message reports the resource as not found) is thrown as a `NoSuchElementError`
  *   instead of a `ValueError`.
+ * @property {boolean} [clientErrorAsProviderError] - If true, a 4xx response is thrown as a
+ *   `ProviderError` instead of a `ValueError`. Set for requests that carry no caller input, which
+ *   therefore cannot be rejected for invalid parameters.
  */
 /**
  * @typedef {Object} LayerswapApiClientConfig
@@ -337,9 +346,10 @@ export type LayerswapApiClientConfig = {
  * Failed requests are thrown as WDK errors, carrying Layerswap's error `code` and the
  * HTTP `status` as extra properties:
  * - `ProviderError` when the API is unreachable, times out, rejects the credentials,
- *   fails server-side, or returns a malformed body;
+ *   rate-limits the client, fails server-side, or returns a malformed body;
  * - `NoSuchElementError` when a looked-up swap or transaction does not exist;
- * - `ValueError` when Layerswap rejects the request parameters (other 4xx responses).
+ * - `ValueError` when Layerswap rejects the request parameters (other 4xx responses), except
+ *   for `getNetworks()`, which takes no parameters and throws a `ProviderError` instead.
  */
 export default class LayerswapApiClient {
     /**
@@ -448,7 +458,7 @@ export default class LayerswapApiClient {
      * @param {string} message
      * @param {string} code
      * @param {number} status
-     * @param {boolean} notFoundAsNoSuchElement
+     * @param {LayerswapRequestOptions} options
      * @returns {LayerswapApiError}
      */
     private _buildResponseError;

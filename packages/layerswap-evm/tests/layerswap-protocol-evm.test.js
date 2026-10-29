@@ -228,6 +228,27 @@ describe('LayerswapProtocolEvm', () => {
       expect(account.sendTransaction).not.toHaveBeenCalled()
     })
 
+    test.each([
+      ['missing', undefined],
+      ['empty', '0x'],
+      ['not hex', 'transfer(0xdead, 100)']
+    ])('erc-20: throws a ProviderError, without sending, when the call data is %s', async (_, callData) => {
+      useSwapHandlers({ ...depositAction({ isErc20: true }), call_data: callData })
+
+      const account = makeAccount()
+      await expect(new LayerswapProtocolEvm(account).swidge(SWIDGE_OPTIONS)).rejects.toThrow(ProviderError)
+      expect(account.sendTransaction).not.toHaveBeenCalled()
+    })
+
+    test('native: sends empty calldata when the deposit action has none', async () => {
+      useSwapHandlers({ ...depositAction({ isErc20: false }), call_data: null })
+
+      const account = makeAccount()
+      await new LayerswapProtocolEvm(account).swidge({ ...SWIDGE_OPTIONS, fromToken: 'ETH', fromTokenAmount: 10n ** 17n })
+
+      expect(account.sendTransaction).toHaveBeenCalledWith({ to: DEPOSIT_ADDRESS, value: 10n ** 17n, data: '0x' })
+    })
+
     test('erc-4337: routes through the array form, forwarding the wallet configuration overrides', async () => {
       useSwapHandlers()
 

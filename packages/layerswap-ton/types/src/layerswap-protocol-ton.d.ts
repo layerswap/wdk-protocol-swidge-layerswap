@@ -124,7 +124,7 @@ export default class LayerswapProtocolTon extends LayerswapSwidgeProtocol {
      *
      * @protected
      * @param {LayerswapTonPreparedDeposit} deposit - The prepared deposit.
-     * @returns {Promise<LayerswapBroadcastDeposit>} The broadcast deposit, with its fee.
+     * @returns {Promise<LayerswapBroadcastDeposit>} The broadcast deposit, with its fee when the wallet reports it.
      * @throws {ProviderRequiredError} If the account is not connected to ton center.
      * @throws {ProviderError} If ton center fails to broadcast the deposit.
      * @throws {MaximumFeeExceededError} If the wallet rejects the transaction fee.

@@ -29,6 +29,8 @@ import {
   normalizeWalletError
 } from '@layerswap/wdk-protocol-swidge-layerswap-core'
 
+const CALL_DATA_PATTERN = /^0x(?:[0-9a-f]{2})*$/i
+
 /** @typedef {import('ethers').Provider} Provider */
 
 /** @typedef {import('@tetherto/wdk-wallet-evm').WalletAccountEvm} WalletAccountEvm */
@@ -202,14 +204,13 @@ export default class LayerswapProtocolEvm extends LayerswapSwidgeProtocol {
       })
     }
 
-    const callData = typeof action.call_data === 'string' && action.call_data.length > 0
-      ? action.call_data
-      : '0x'
+    const isErc20 = this._isErc20(route.sourceToken)
+    const callData = this._parseCallData(action.call_data, isErc20)
 
     /** @type {LayerswapEvmDepositTransaction} */
     const tx = {
       to: action.to_address,
-      value: this._isErc20(route.sourceToken) ? 0n : this._parseDepositAmount(action.amount_in_base_units, fromTokenAmount),
+      value: isErc20 ? 0n : this._parseDepositAmount(action.amount_in_base_units, fromTokenAmount),
       data: callData
     }
 
@@ -287,6 +288,32 @@ export default class LayerswapProtocolEvm extends LayerswapSwidgeProtocol {
     const network = await this._callWallet(() => this._provider.getNetwork())
     this._chainId = network.chainId
     return this._chainId
+  }
+
+  /**
+   * Parses the call data of a Layerswap deposit action. An erc-20 deposit is a call to the
+   * token contract, so it cannot be sent without call data; a native deposit may have none.
+   *
+   * @private
+   * @param {unknown} callData - The call data of the deposit action.
+   * @param {boolean} isErc20 - True if the source token is an erc-20 token.
+   * @returns {string} The call data (`'0x'` when a native deposit has none).
+   * @throws {ProviderError} If the call data is malformed, or missing for an erc-20 deposit.
+   */
+  _parseCallData (callData, isErc20) {
+    const isEmpty = callData === undefined || callData === null || callData === '' || callData === '0x'
+
+    if (isEmpty && !isErc20) {
+      return '0x'
+    }
+
+    if (isEmpty || typeof callData !== 'string' || !CALL_DATA_PATTERN.test(callData)) {
+      throw new ProviderError(`Layerswap returned invalid call data '${callData}' for an ${isErc20 ? 'erc-20' : 'native'} deposit.`, {
+        reason: ProviderErrorReason.INTERNAL_SERVER_ERROR
+      })
+    }
+
+    return callData
   }
 
   /**
