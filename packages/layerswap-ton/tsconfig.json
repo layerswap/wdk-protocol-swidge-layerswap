@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "include": [
+    "index.js",
+    "src/**/*.js"
+  ],
+  "compilerOptions": {
+    "outDir": "./types"
+  }
+}

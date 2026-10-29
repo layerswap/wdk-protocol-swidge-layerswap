@@ -1,0 +1,70 @@
+{
+  "name": "@layerswap/wdk-protocol-swidge-layerswap-evm",
+  "version": "1.0.0-beta.1",
+  "description": "WDK Swidge module that lets @tetherto/wdk-wallet-evm and wallet-evm-erc-4337 wallet accounts swap and bridge tokens across chains via the Layerswap public API, using the ISwidgeProtocol interface.",
+  "keywords": [
+    "wdk",
+    "protocol",
+    "swidge",
+    "swap",
+    "bridge",
+    "layerswap",
+    "evm",
+    "erc-4337"
+  ],
+  "author": "Aren <aren@bransfer.io>",
+  "license": "Apache-2.0",
+  "main": "index.js",
+  "files": [
+    "index.js",
+    "bare.js",
+    "src/",
+    "types/"
+  ],
+  "type": "module",
+  "scripts": {
+    "build:types": "tsc",
+    "lint": "standard",
+    "lint:fix": "standard --fix",
+    "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest",
+    "test:coverage": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --coverage",
+    "test:e2e": "node tests/integration/swidge-testnet.mjs"
+  },
+  "dependencies": {
+    "@layerswap/wdk-protocol-swidge-layerswap-core": "workspace:*",
+    "@tetherto/wdk-wallet": "1.0.0-beta.25",
+    "@tetherto/wdk-wallet-evm": "1.0.0-beta.24",
+    "@tetherto/wdk-wallet-evm-erc-4337": "1.0.0-beta.23",
+    "bare-node-runtime": "^1.5.0",
+    "ethers": "6.17.0"
+  },
+  "devDependencies": {
+    "@jest/globals": "30.4.1",
+    "@layerswap/wdk-protocol-swidge-layerswap-test-utils": "workspace:*",
+    "cross-env": "10.1.0",
+    "jest": "30.4.2",
+    "standard": "17.1.2",
+    "typescript": "7.0.2"
+  },
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts",
+      "bare": "./bare.js",
+      "default": "./index.js"
+    },
+    "./package": {
+      "default": "./package.json"
+    }
+  },
+  "standard": {
+    "ignore": [
+      "bare.js",
+      "tests/**/*.js",
+      "tests/**/*.mjs",
+      "types/**/*"
+    ]
+  },
+  "directories": {
+    "test": "tests"
+  }
+}
