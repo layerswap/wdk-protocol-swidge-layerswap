@@ -14,6 +14,12 @@
   "author": "Aren <aren@bransfer.io>",
   "license": "Apache-2.0",
   "main": "index.js",
+  "files": [
+    "index.js",
+    "bare.js",
+    "src/",
+    "types/"
+  ],
   "type": "module",
   "scripts": {
     "build:types": "tsc",
@@ -24,22 +30,16 @@
   },
   "dependencies": {
     "@layerswap/wdk-protocol-swidge-layerswap-core": "workspace:*",
+    "@tetherto/wdk-wallet": "1.0.0-beta.25",
+    "@tetherto/wdk-wallet-ton": "1.0.0-beta.17",
+    "@ton/core": "0.63.1",
+    "@ton/crypto": "3.3.0",
+    "@ton/ton": "16.2.4",
     "bare-node-runtime": "^1.5.0"
-  },
-  "peerDependencies": {
-    "@tetherto/wdk-wallet": ">=1.0.0-beta.17",
-    "@tetherto/wdk-wallet-ton": ">=1.0.0-beta.13",
-    "@ton/core": ">=0.63.0 <1.0.0",
-    "@ton/crypto": ">=3.2.0",
-    "@ton/ton": ">=16.2.4 <17.0.0"
   },
   "devDependencies": {
     "@jest/globals": "30.4.1",
-    "@tetherto/wdk-wallet": "1.0.0-beta.17",
-    "@tetherto/wdk-wallet-ton": "1.0.0-beta.13",
-    "@ton/core": "0.63.1",
-    "@ton/crypto": "3.3.0",
-    "@ton/ton": "16.3.0",
+    "@layerswap/wdk-protocol-swidge-layerswap-test-utils": "workspace:*",
     "cross-env": "10.1.0",
     "jest": "30.4.2",
     "standard": "17.1.2",

@@ -1,4 +1,4 @@
-// Copyright 2026 Aren &lt;aren@bransfer.io&gt;
+// Copyright 2026 Aren <aren@bransfer.io>
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.

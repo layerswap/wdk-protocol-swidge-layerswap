@@ -13,9 +13,12 @@
 // limitations under the License.
 
 /** @typedef {import('./src/layerswap-api-client.js').LayerswapApiClientConfig} LayerswapApiClientConfig */
+/** @typedef {import('./src/layerswap-api-client.js').LayerswapApiError} LayerswapApiError */
+/** @typedef {import('./src/layerswap-api-client.js').LayerswapApiErrorDetails} LayerswapApiErrorDetails */
 /** @typedef {import('./src/layerswap-api-client.js').LayerswapToken} LayerswapToken */
 /** @typedef {import('./src/layerswap-api-client.js').LayerswapNetwork} LayerswapNetwork */
 /** @typedef {import('./src/layerswap-api-client.js').LayerswapQuote} LayerswapQuote */
+/** @typedef {import('./src/layerswap-api-client.js').LayerswapQuoteResponse} LayerswapQuoteResponse */
 /** @typedef {import('./src/layerswap-api-client.js').LayerswapDepositAction} LayerswapDepositAction */
 /** @typedef {import('./src/layerswap-api-client.js').LayerswapSwap} LayerswapSwap */
 /** @typedef {import('./src/layerswap-api-client.js').LayerswapSwapResponse} LayerswapSwapResponse */
@@ -31,8 +34,31 @@
 /** @typedef {import('./src/swidge.js').LayerswapSwidgeTransaction} LayerswapSwidgeTransaction */
 /** @typedef {import('./src/swidge.js').LayerswapSwidgeQuote} LayerswapSwidgeQuote */
 /** @typedef {import('./src/swidge.js').LayerswapSwidgeStatusResult} LayerswapSwidgeStatusResult */
+/** @typedef {import('./src/swidge.js').LayerswapSwidgeStatusOptions} LayerswapSwidgeStatusOptions */
+/** @typedef {import('./src/swidge.js').LayerswapSwidgeSupportedChain} LayerswapSwidgeSupportedChain */
+/** @typedef {import('./src/swidge.js').LayerswapSwidgeSupportedToken} LayerswapSwidgeSupportedToken */
+/** @typedef {import('./src/swidge.js').LayerswapSwidgeSupportedTokensOptions} LayerswapSwidgeSupportedTokensOptions */
+/** @typedef {import('./src/swidge.js').LayerswapFeeGuardsConfig} LayerswapFeeGuardsConfig */
+
+/** @typedef {import('./src/layerswap-swidge-protocol.js').LayerswapProtocolConfig} LayerswapProtocolConfig */
+/** @typedef {import('./src/layerswap-swidge-protocol.js').LayerswapSwidgeOptions} LayerswapSwidgeOptions */
+/** @typedef {import('./src/layerswap-swidge-protocol.js').LayerswapSpecificSwidgeOptions} LayerswapSpecificSwidgeOptions */
+/** @typedef {import('./src/layerswap-swidge-protocol.js').LayerswapSwidgeConfig} LayerswapSwidgeConfig */
+/** @typedef {import('./src/layerswap-swidge-protocol.js').LayerswapBridgeConfig} LayerswapBridgeConfig */
+/** @typedef {import('./src/layerswap-swidge-protocol.js').LayerswapBridgeOptions} LayerswapBridgeOptions */
+/** @typedef {import('./src/layerswap-swidge-protocol.js').LayerswapBridgeResult} LayerswapBridgeResult */
+/** @typedef {import('./src/layerswap-swidge-protocol.js').LayerswapSpecificBridgeResult} LayerswapSpecificBridgeResult */
+/** @typedef {import('./src/layerswap-swidge-protocol.js').GetTransactionStatusOptions} GetTransactionStatusOptions */
+/** @typedef {import('./src/layerswap-swidge-protocol.js').LayerswapSwidgeRoute} LayerswapSwidgeRoute */
+/** @typedef {import('./src/layerswap-swidge-protocol.js').LayerswapDepositSwap} LayerswapDepositSwap */
+/** @typedef {import('./src/layerswap-swidge-protocol.js').LayerswapDepositContext} LayerswapDepositContext */
+/** @typedef {import('./src/layerswap-swidge-protocol.js').LayerswapPreparedDeposit} LayerswapPreparedDeposit */
+/** @typedef {import('./src/layerswap-swidge-protocol.js').LayerswapBroadcastDeposit} LayerswapBroadcastDeposit */
+/** @typedef {import('./src/layerswap-swidge-protocol.js').LayerswapLegacyBridgeFees} LayerswapLegacyBridgeFees */
 
 export { default } from './src/layerswap-api-client.js'
+
+export { default as LayerswapSwidgeProtocol } from './src/layerswap-swidge-protocol.js'
 
 export { default as LayerswapApiClient } from './src/layerswap-api-client.js'
 
@@ -55,5 +81,7 @@ export {
   buildSwidgeQuote,
   parseCompletionTime,
   formatSlippage,
-  assertFeeGuards
+  assertFeeGuards,
+  normalizeWalletError,
+  toBigIntOption
 } from './src/swidge.js'

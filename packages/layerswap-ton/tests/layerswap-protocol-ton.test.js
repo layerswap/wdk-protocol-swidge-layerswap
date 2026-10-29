@@ -1,29 +1,49 @@
-import { afterEach, beforeEach, describe, expect, jest, test } from '@jest/globals'
+// Tests of the TON specifics only: the default source network, gas approximations, the
+// deposit message (jetton / native), account detection and wallet error mapping. The
+// chain-agnostic swidge behaviour (quotes, guards, status, bridge adapters, discovery, …)
+// is covered once by the `LayerswapSwidgeProtocol` tests in
+// `@layerswap/wdk-protocol-swidge-layerswap-core`.
+
+import { describe, expect, jest, test } from '@jest/globals'
 
 import { Address, Cell, toNano } from '@ton/ton'
 
-import LayerswapProtocolTon from '../index.js'
+import {
+  http,
+  HttpResponse,
+  layerswapApi,
+  recordRequests,
+  setupLayerswapServer
+} from '@layerswap/wdk-protocol-swidge-layerswap-test-utils'
 
-// ---------------------------------------------------------------------------
-// Fixtures (a slice of what Layerswap returns for TON_MAINNET routes).
-// ---------------------------------------------------------------------------
+import LayerswapProtocolTon, {
+  AccountRequiredError,
+  DisposalError,
+  MaximumFeeExceededError,
+  NoSuchElementError,
+  ProviderError,
+  ProviderRequiredError,
+  ValueError
+} from '../index.js'
 
-// Build deterministic, checksum-valid TON addresses from raw hashes so the tests
-// don't depend on real on-chain addresses.
+// Deterministic, checksum-valid TON addresses built from raw hashes.
 function tonAddr (byte) {
   return new Address(0, Buffer.alloc(32, byte)).toString({ bounceable: true, urlSafe: true })
 }
 
 const TON_JETTON_USDT_MASTER = tonAddr(0x11)
-const TON_DEPOSIT_FRIENDLY = tonAddr(0x22)
+const TON_DEPOSIT_ADDRESS = tonAddr(0x22)
+const SENDER_ADDRESS = tonAddr(0x33)
+const SENDER_JETTON_WALLET = tonAddr(0x44)
+const EVM_RECIPIENT = '0xa460AEbce0d3A4BecAd8ccf9D6D4861296c503Bd'
 
 const TON_MAINNET = {
   name: 'TON_MAINNET',
   chain_id: null,
   type: 'ton',
   tokens: [
-    { symbol: 'TON', contract: null, decimals: 9, price_in_usd: 5 },
-    { symbol: 'USDT', contract: TON_JETTON_USDT_MASTER, decimals: 6, price_in_usd: 1 }
+    { symbol: 'TON', contract: null, decimals: 9 },
+    { symbol: 'USDT', contract: TON_JETTON_USDT_MASTER, decimals: 6 }
   ]
 }
 
@@ -32,318 +52,268 @@ const ARBITRUM_MAINNET = {
   chain_id: '42161',
   type: 'evm',
   tokens: [
-    { symbol: 'USDT', contract: '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9', decimals: 6, price_in_usd: 1 },
-    { symbol: 'ETH', contract: null, decimals: 18, price_in_usd: 2128 }
+    { symbol: 'USDT', contract: '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9', decimals: 6 },
+    { symbol: 'ETH', contract: null, decimals: 18 }
   ]
 }
 
-// Same-VM destination (type 'ton') used to exercise the recipient-defaulting path.
-const TON_TESTNET = {
-  name: 'TON_TESTNET',
-  chain_id: null,
-  type: 'ton',
-  tokens: [
-    { symbol: 'TON', contract: null, decimals: 9, price_in_usd: 5 },
-    { symbol: 'USDT', contract: tonAddr(0x55), decimals: 6, price_in_usd: 1 }
-  ]
-}
+const TON_TESTNET = { ...TON_MAINNET, name: 'TON_TESTNET' }
 
-const NETWORKS = [TON_MAINNET, ARBITRUM_MAINNET, TON_TESTNET]
+const NETWORKS = [TON_MAINNET, TON_TESTNET, ARBITRUM_MAINNET]
 
-const SENDER_FRIENDLY = tonAddr(0x33)
-// Resolved jetton wallet for the sender — deterministic, checksum-valid address.
-const SENDER_JETTON_WALLET = tonAddr(0x44)
+// Root hashes of the TON mainnet / testnet zero-state blocks.
+const MAINNET_ZERO_STATE = 'F6OpKZKqvqeFp6CQmFomXNMfMj2EnaUSOXN+Mh+wVWk='
+const TESTNET_ZERO_STATE = 'gj+B8wb/AmlPk1z1AhVI484rhrUpgSr2oSFIh56VoSg='
 
-// ---------------------------------------------------------------------------
-// Helpers.
-// ---------------------------------------------------------------------------
+const TON_CENTER_V3_URL = 'https://toncenter.test/api/v3'
+const TON_CENTER_API_KEY = 'ton-center-key'
 
-function buildFetchRouter (handlers) {
-  return jest.fn((url, init) => {
-    const method = (init && init.method) ?? 'GET'
-    const u = new URL(url)
-    const path = u.pathname
-    const search = u.search
+const depositAction = ({ callData = JSON.stringify({ comment: 'swap-ref', amount: '10000000' }), toAddress = TON_DEPOSIT_ADDRESS } = {}) => ({
+  type: 'transfer',
+  order: 0,
+  to_address: toAddress,
+  amount: 10,
+  amount_in_base_units: '10000000',
+  call_data: callData
+})
 
-    for (const handler of handlers) {
-      if (handler.method !== method) continue
-      if (!handler.match.test(path + search)) continue
-      const body = handler.body(url, init)
-      const text = JSON.stringify(body)
-      return Promise.resolve({
-        ok: handler.status >= 200 && handler.status < 300,
-        status: handler.status,
-        statusText: handler.status === 200 ? 'OK' : 'Error',
-        text: () => Promise.resolve(text),
-        json: () => Promise.resolve(body)
-      })
-    }
+const server = setupLayerswapServer()
 
-    throw new Error(`Unmocked fetch: ${method} ${path}${search}`)
-  })
-}
+const useSwapHandlers = (action = depositAction()) =>
+  server.use(...layerswapApi.swidgeFlow({ networks: NETWORKS, depositActions: [action], swapId: 'swap-ton-123' }))
 
 /**
- * Builds a mock TON account. The protocol only consumes:
- *   - getAddress()
- *   - sendTransaction({ to, value, body })
- *   - _getJettonWalletAddress(token)
- *
- * `writable: false` removes sendTransaction so the read-only guard fires.
+ * Builds a mock TON account. The protocol only consumes `getAddress()`,
+ * `sendTransaction({ to, value, body })`, `_getJettonWalletAddress(token)`, `keyPair` and
+ * the ton center client (`_tonClient`) the account was built with.
  */
-function makeAccount ({
-  writable = true,
-  address = SENDER_FRIENDLY,
-  sendResult = { hash: 'tonhash-deadbeef', fee: 12_345_000n },
-  jettonWallet = SENDER_JETTON_WALLET
-} = {}) {
-  const sendTransaction = jest.fn().mockResolvedValue(sendResult)
-  const getJettonWalletAddress = jest.fn().mockResolvedValue(Address.parse(jettonWallet))
-
+function makeAccount ({ writable = true, zeroState = MAINNET_ZERO_STATE } = {}) {
   const account = {
-    getAddress: jest.fn().mockResolvedValue(address),
-    _getJettonWalletAddress: getJettonWalletAddress
+    getAddress: jest.fn().mockResolvedValue(SENDER_ADDRESS),
+    _getJettonWalletAddress: jest.fn().mockResolvedValue(Address.parse(SENDER_JETTON_WALLET)),
+    _tonClient: {
+      api: { getMasterchainInfo: jest.fn().mockResolvedValue({ init: { root_hash: zeroState } }) }
+    },
+    _resolveTonCenterEndpoint: () => ({ baseUrl: TON_CENTER_V3_URL, apiKey: TON_CENTER_API_KEY })
   }
-  if (writable) account.sendTransaction = sendTransaction
 
-  return { account, sendTransaction, getJettonWalletAddress, address }
-}
-
-// ---------------------------------------------------------------------------
-// Layerswap API handlers.
-// ---------------------------------------------------------------------------
-
-const NETWORKS_HANDLER = {
-  method: 'GET',
-  match: /^\/api\/v2\/networks$/,
-  status: 200,
-  body: () => ({ data: NETWORKS })
-}
-
-function makeQuoteHandler (overrides = {}) {
-  return {
-    method: 'GET',
-    match: /^\/api\/v2\/quote\?/,
-    status: 200,
-    body: () => ({
-      data: {
-        quote: {
-          requested_amount: 10,
-          receive_amount: 9.5,
-          min_receive_amount: 9.4,
-          total_fee: 0.5,
-          total_fee_in_usd: 0.5,
-          blockchain_fee: 0.45,
-          service_fee: 0.05,
-          ...overrides
-        }
-      }
-    })
+  if (writable) {
+    account.sendTransaction = jest.fn().mockResolvedValue({ hash: 'tonhash-deadbeef', fee: 12_345_000n })
   }
+
+  return account
 }
 
-const QUOTE_HANDLER = makeQuoteHandler()
-
-function makeCreateSwapHandler ({
-  totalFee = 0.5,
-  callData = JSON.stringify({ comment: 'swap-ref-abc', amount: '10000000' }),
-  tokenSymbol = 'USDT'
-} = {}) {
-  return {
-    method: 'POST',
-    match: /^\/api\/v2\/swaps$/,
-    status: 200,
-    body: (_url, _init) => {
-      const sourceToken = TON_MAINNET.tokens.find((t) => t.symbol === tokenSymbol)
-      return ({
-        data: {
-          swap: {
-            id: 'swap-ton-123',
-            created_date: '2026-05-22T00:00:00Z',
-            status: 'created',
-            source_network: TON_MAINNET,
-            source_token: sourceToken,
-            destination_network: ARBITRUM_MAINNET,
-            destination_token: ARBITRUM_MAINNET.tokens.find((t) => t.symbol === 'USDT'),
-            destination_address: '0xa460AEbce0d3A4BecAd8ccf9D6D4861296c503Bd',
-            requested_amount: 10
-          },
-          deposit_actions: [{
-            amount: 10,
-            amount_in_base_units: '10000000',
-            call_data: callData,
-            to_address: TON_DEPOSIT_FRIENDLY,
-            token: sourceToken,
-            fee_token: TON_MAINNET.tokens.find((t) => t.symbol === 'TON'),
-            network: TON_MAINNET,
-            order: 0,
-            type: 'transfer'
-          }],
-          quote: {
-            quote: {
-              requested_amount: 10,
-              receive_amount: 10 - totalFee,
-              min_receive_amount: 10 - totalFee - 0.05,
-              total_fee: totalFee,
-              total_fee_in_usd: totalFee,
-              blockchain_fee: totalFee * 0.9,
-              service_fee: totalFee * 0.1
-            }
-          }
-        }
-      })
-    }
-  }
+const JETTON_SWIDGE_OPTIONS = {
+  fromToken: 'USDT',
+  toChain: 'ARBITRUM_MAINNET',
+  recipient: EVM_RECIPIENT,
+  fromTokenAmount: 10_000_000n
 }
 
-const SPEEDUP_HANDLER = {
-  method: 'POST',
-  match: /^\/api\/v2\/swaps\/[^/]+\/deposit_speedup$/,
-  status: 200,
-  body: () => ({ data: null })
+const NATIVE_SWIDGE_OPTIONS = {
+  fromToken: 'TON',
+  toToken: 'ETH',
+  toChain: 'ARBITRUM_MAINNET',
+  recipient: EVM_RECIPIENT,
+  fromTokenAmount: 1_000_000_000n
 }
-
-// ---------------------------------------------------------------------------
-// Tests.
-// ---------------------------------------------------------------------------
 
 describe('LayerswapProtocolTon', () => {
-  let originalFetch
-  beforeEach(() => { originalFetch = global.fetch })
-  afterEach(() => { global.fetch = originalFetch })
+  describe('source network', () => {
+    const quotedSourceNetwork = async (protocol, options = JETTON_SWIDGE_OPTIONS) => {
+      server.use(layerswapApi.networks(NETWORKS), layerswapApi.quote())
+      const requests = recordRequests(server)
 
-  describe('constructor', () => {
-    test('accepts a config-less init', () => {
-      const { account } = makeAccount()
-      const p = new LayerswapProtocolTon(account)
-      expect(p.getApiClient()).toBeDefined()
+      await protocol.quoteSwidge(options)
+
+      return new URL(requests.find((request) => request.url.includes('/api/v2/quote')).url).searchParams.get('source_network')
+    }
+
+    test.each([
+      ['TON_MAINNET', MAINNET_ZERO_STATE],
+      ['TON_TESTNET', TESTNET_ZERO_STATE]
+    ])('detects %s from the zero state of the account ton center', async (expected, zeroState) => {
+      await expect(quotedSourceNetwork(new LayerswapProtocolTon(makeAccount({ zeroState })))).resolves.toBe(expected)
     })
 
-    test('honours apiKey + apiUrl + bridgeMaxFee config', () => {
-      const { account } = makeAccount()
-      const p = new LayerswapProtocolTon(account, {
-        apiKey: 'ls-test-key',
-        apiUrl: 'https://example.com/api',
-        bridgeMaxFee: 1_000_000n
-      })
-      expect(p._config.bridgeMaxFee).toBe(1_000_000n)
-    })
-  })
+    test('asks ton center once per protocol instance', async () => {
+      const account = makeAccount()
+      const protocol = new LayerswapProtocolTon(account)
 
-  describe('quoteBridge', () => {
-    test('returns bridgeFee in source-token base units and jetton fee approximation', async () => {
-      global.fetch = buildFetchRouter([NETWORKS_HANDLER, QUOTE_HANDLER])
+      await quotedSourceNetwork(protocol)
+      await quotedSourceNetwork(protocol)
 
-      const { account } = makeAccount()
-      const p = new LayerswapProtocolTon(account)
-
-      const result = await p.quoteBridge({
-        targetChain: 'ARBITRUM_MAINNET',
-        recipient: '0xa460AEbce0d3A4BecAd8ccf9D6D4861296c503Bd',
-        token: 'USDT',
-        amount: 10_000_000n
-      })
-
-      // USDT-jetton has 6 decimals; total_fee 0.5 → 500000 base units.
-      expect(result.bridgeFee).toBe(500_000n)
-      // Jetton approximation = 0.05 TON = 50_000_000n nanotons.
-      expect(result.fee).toBe(50_000_000n)
+      expect(account._tonClient.api.getMasterchainInfo).toHaveBeenCalledTimes(1)
     })
 
-    test('uses native-fee approximation for TON quotes', async () => {
-      global.fetch = buildFetchRouter([NETWORKS_HANDLER, QUOTE_HANDLER])
-
-      const { account } = makeAccount()
-      const p = new LayerswapProtocolTon(account)
-
-      const result = await p.quoteBridge({
-        targetChain: 'ARBITRUM_MAINNET',
-        recipient: '0xa460AEbce0d3A4BecAd8ccf9D6D4861296c503Bd',
-        token: 'TON',
-        destinationToken: 'ETH',
-        amount: 1_000_000_000n
-      })
-
-      // Native TON approximation = 0.01 TON = 10_000_000n nanotons.
-      expect(result.fee).toBe(10_000_000n)
+    test('defaults to TON_MAINNET without an account', async () => {
+      await expect(quotedSourceNetwork(new LayerswapProtocolTon(undefined))).resolves.toBe('TON_MAINNET')
     })
 
-    test('surfaces Layerswap API errors', async () => {
-      global.fetch = buildFetchRouter([NETWORKS_HANDLER, {
-        method: 'GET',
-        match: /^\/api\/v2\/quote\?/,
-        status: 400,
-        body: () => ({ error: { code: 'BAD_REQUEST', message: 'invalid route' } })
-      }])
+    test('throws a ValueError on an unknown zero state', async () => {
+      server.use(layerswapApi.networks(NETWORKS))
 
-      const { account } = makeAccount()
-      const p = new LayerswapProtocolTon(account)
-
-      await expect(p.quoteBridge({
-        targetChain: 'ARBITRUM_MAINNET',
-        recipient: '0xa460AEbce0d3A4BecAd8ccf9D6D4861296c503Bd',
-        token: 'USDT',
-        amount: 10_000_000n
-      })).rejects.toThrow(/BAD_REQUEST/)
+      await expect(new LayerswapProtocolTon(makeAccount({ zeroState: 'unknown' })).quoteSwidge(JETTON_SWIDGE_OPTIONS))
+        .rejects.toThrow(ValueError)
     })
 
-    test('respects sourceChain override (no validation against a fixed default)', async () => {
-      // Should send TON_MAINNET in the route resolution regardless of the override
-      // succeeding — the network simply needs to exist in the catalog. We verify
-      // that an unknown sourceChain leads to a clear error from the core helper.
-      global.fetch = buildFetchRouter([NETWORKS_HANDLER])
+    test('throws a ProviderRequiredError when the account is not connected to ton center', async () => {
+      server.use(layerswapApi.networks(NETWORKS))
 
-      const { account } = makeAccount()
-      const p = new LayerswapProtocolTon(account)
+      const account = makeAccount()
+      delete account._tonClient
 
-      await expect(p.quoteBridge({
-        targetChain: 'ARBITRUM_MAINNET',
-        sourceChain: 'TON_UNKNOWN',
-        recipient: '0xa460AEbce0d3A4BecAd8ccf9D6D4861296c503Bd',
-        token: 'USDT',
-        amount: 10_000_000n
-      })).rejects.toThrow(/TON_UNKNOWN/)
+      await expect(new LayerswapProtocolTon(account).quoteSwidge(JETTON_SWIDGE_OPTIONS)).rejects.toThrow(ProviderRequiredError)
+    })
+
+    test('throws a ValueError, without sending, when fromChain is not the ton center network', async () => {
+      useSwapHandlers()
+
+      const account = makeAccount()
+
+      await expect(new LayerswapProtocolTon(account).swidge({ ...JETTON_SWIDGE_OPTIONS, fromChain: 'TON_TESTNET' }))
+        .rejects.toThrow("The 'fromChain' option is 'TON_TESTNET', but the wallet account is connected to 'TON_MAINNET'.")
+      expect(account.sendTransaction).not.toHaveBeenCalled()
+    })
+
+    test('getTransactionStatus defaults the network to TON_MAINNET, passing Layerswap ids as-is', async () => {
+      server.use(layerswapApi.networks(NETWORKS), layerswapApi.transactionStatus('completed'))
+      const requests = recordRequests(server)
+
+      await expect(new LayerswapProtocolTon(makeAccount()).getTransactionStatus('hash-aa')).resolves.toEqual({ status: 'completed' })
+
+      const { searchParams } = new URL(requests.at(-1).url)
+      expect(searchParams.get('network')).toBe('TON_MAINNET')
+      expect(searchParams.get('transaction_id')).toBe('hash-aa')
     })
   })
 
-  describe('bridge — jetton (USDT)', () => {
-    test('happy path: resolves jetton wallet, builds jetton-transfer body, sends with 0.045 TON gas', async () => {
-      global.fetch = buildFetchRouter([
-        NETWORKS_HANDLER,
-        makeCreateSwapHandler({ callData: JSON.stringify({ comment: 'ref-jetton', amount: '10000000' }) }),
-        SPEEDUP_HANDLER
-      ])
+  describe('transaction status', () => {
+    const BODY_HASH = 'c3aef0d255b9aa66bd84dfd710347cfbe2c9d0c88ebce25958131d06e149058d'
+    const WALLET_TX = 'lWFEQBGDeJNGdvXDxMFDqTckfkCTuTOopYs3NXIs5fE='
 
-      const { account, sendTransaction, getJettonWalletAddress } = makeAccount()
-      const p = new LayerswapProtocolTon(account)
+    // Mirrors ton center v3: the wallet transaction found by the external message body hash,
+    // and the trace it starts.
+    const useTonCenter = ({ walletTransactions = [{ hash: WALLET_TX }], transactions, headers = [] } = {}) => server.use(
+      http.get(`${TON_CENTER_V3_URL}/transactionsByMessage`, ({ request }) => {
+        headers.push(request.headers.get('x-api-key'))
+        return HttpResponse.json({ transactions: walletTransactions })
+      }),
+      http.get(`${TON_CENTER_V3_URL}/traces`, () => HttpResponse.json({ traces: [{ transactions }] })),
+      layerswapApi.networks(NETWORKS),
+      layerswapApi.transactionStatus('completed')
+    )
 
-      const result = await p.bridge({
-        targetChain: 'ARBITRUM_MAINNET',
-        recipient: '0xa460AEbce0d3A4BecAd8ccf9D6D4861296c503Bd',
-        token: 'USDT',
-        amount: 10_000_000n
+    const requestedId = (requests) => new URL(requests.find((request) => request.url.includes('/transaction_status')).url).searchParams.get('transaction_id')
+
+    test('resolves a jetton deposit to the transfer notification that reached the deposit address', async () => {
+      const headers = []
+      useTonCenter({
+        headers,
+        transactions: {
+          [WALLET_TX]: { in_msg: { opcode: null }, out_msgs: [{ hash: 'to-jetton-wallet', opcode: '0x0f8a7ea5' }] },
+          'deposit-jetton-wallet-tx': { in_msg: { hash: 'internal-transfer', opcode: '0x178d4519' } },
+          'deposit-tx': { in_msg: { hash: 'notification-hash', opcode: '0x7362d09c' } }
+        }
       })
+      const requests = recordRequests(server)
 
-      expect(result.hash).toBe('tonhash-deadbeef')
-      expect(result.swapId).toBe('swap-ton-123')
-      expect(result.bridgeFee).toBe(500_000n)
-      expect(result.fee).toBe(12_345_000n) // pass-through from account.sendTransaction
+      await expect(new LayerswapProtocolTon(makeAccount()).getTransactionStatus(BODY_HASH)).resolves.toEqual({ status: 'completed' })
 
-      expect(getJettonWalletAddress).toHaveBeenCalledWith(TON_JETTON_USDT_MASTER)
-      expect(sendTransaction).toHaveBeenCalledTimes(1)
+      expect(requestedId(requests)).toBe('notification-hash')
+      expect(headers).toEqual([TON_CENTER_API_KEY])
+    })
 
-      const sent = sendTransaction.mock.calls[0][0]
+    test('resolves a native deposit to the wallet message sent to the deposit address', async () => {
+      useTonCenter({
+        transactions: {
+          [WALLET_TX]: { in_msg: { opcode: null }, out_msgs: [{ hash: 'to-deposit-address', opcode: '0x00000000' }] }
+        }
+      })
+      const requests = recordRequests(server)
+
+      await new LayerswapProtocolTon(makeAccount()).getTransactionStatus(BODY_HASH)
+
+      expect(requestedId(requests)).toBe('to-deposit-address')
+    })
+
+    test.each([
+      ['ton center has not indexed the deposit', { walletTransactions: [] }],
+      ['the jetton notification has not been delivered', { transactions: { [WALLET_TX]: { out_msgs: [{ hash: 'to-jetton-wallet', opcode: '0x0f8a7ea5' }] } } }]
+    ])('throws a NoSuchElementError, without asking Layerswap, when %s', async (_, tonCenter) => {
+      useTonCenter(tonCenter)
+      const requests = recordRequests(server)
+
+      await expect(new LayerswapProtocolTon(makeAccount()).getTransactionStatus(BODY_HASH)).rejects.toThrow(NoSuchElementError)
+      expect(requests.some((request) => request.url.includes('/transaction_status'))).toBe(false)
+    })
+
+    test('reads the api key from the ton client http api when the wallet does not report it', async () => {
+      const headers = []
+      useTonCenter({ headers, transactions: { [WALLET_TX]: { out_msgs: [{ hash: 'to-deposit-address', opcode: '0x00000000' }] } } })
+
+      const account = makeAccount()
+      account._resolveTonCenterEndpoint = () => ({ baseUrl: TON_CENTER_V3_URL, apiKey: undefined })
+      account._tonClient.api.parameters = { apiKey: 'http-api-key' }
+
+      await new LayerswapProtocolTon(account).getTransactionStatus(BODY_HASH)
+
+      expect(headers).toEqual(['http-api-key'])
+    })
+
+    test('throws a ProviderError when ton center fails', async () => {
+      server.use(layerswapApi.networks(NETWORKS), http.get(`${TON_CENTER_V3_URL}/transactionsByMessage`, () => HttpResponse.json({}, { status: 500 })))
+
+      await expect(new LayerswapProtocolTon(makeAccount()).getTransactionStatus(BODY_HASH)).rejects.toThrow(ProviderError)
+    })
+
+    test('throws a ProviderRequiredError for a deposit hash without ton center', async () => {
+      server.use(layerswapApi.networks(NETWORKS))
+
+      await expect(new LayerswapProtocolTon(undefined).getTransactionStatus(BODY_HASH, { sourceChain: 'TON_MAINNET' }))
+        .rejects.toThrow(ProviderRequiredError)
+    })
+  })
+
+  describe('gas quote', () => {
+    test('approximates the jetton-transfer fee for jetton sources', async () => {
+      server.use(layerswapApi.networks(NETWORKS), layerswapApi.quote())
+
+      const quote = await new LayerswapProtocolTon(makeAccount()).quoteSwidge(JETTON_SWIDGE_OPTIONS)
+
+      expect(quote.fees.at(-1)).toEqual({ type: 'network', amount: 50_000_000n, token: 'TON', chain: 'TON_MAINNET', included: false, description: 'Source-chain gas' })
+    })
+
+    test('approximates the native-transfer fee for TON sources', async () => {
+      server.use(layerswapApi.networks(NETWORKS), layerswapApi.quote())
+
+      const quote = await new LayerswapProtocolTon(makeAccount()).quoteSwidge(NATIVE_SWIDGE_OPTIONS)
+
+      expect(quote.fees.at(-1)).toMatchObject({ type: 'network', amount: 10_000_000n, token: 'TON', included: false })
+    })
+  })
+
+  describe('deposit message — jetton', () => {
+    test('sends a TIP-3 jetton transfer to the sender jetton wallet with a 0.045 TON gas budget', async () => {
+      useSwapHandlers(depositAction({ callData: JSON.stringify({ comment: 'ref-jetton', amount: '10000000' }) }))
+
+      const account = makeAccount()
+      await new LayerswapProtocolTon(account).swidge(JETTON_SWIDGE_OPTIONS)
+
+      expect(account._getJettonWalletAddress).toHaveBeenCalledWith(TON_JETTON_USDT_MASTER)
+
+      const sent = account.sendTransaction.mock.calls[0][0]
       expect(sent.to).toBe(Address.parse(SENDER_JETTON_WALLET).toString())
       expect(sent.value).toBe(toNano('0.045'))
       expect(sent.body).toBeInstanceOf(Cell)
 
-      // Decode the body and assert TIP-3 op + jetton amount + destinations.
       const slice = sent.body.beginParse()
       expect(slice.loadUint(32)).toBe(0x0f8a7ea5) // op
-      expect(slice.loadUintBig(64)).toBe(0n)      // query id
+      expect(slice.loadUintBig(64)).toBe(0n) // query id
       expect(slice.loadCoins()).toBe(10_000_000n) // jetton amount from call_data
-      expect(slice.loadAddress().toString()).toBe(Address.parse(TON_DEPOSIT_FRIENDLY).toString())
-      expect(slice.loadAddress().toString()).toBe(Address.parse(TON_DEPOSIT_FRIENDLY).toString())
+      expect(slice.loadAddress().toString()).toBe(Address.parse(TON_DEPOSIT_ADDRESS).toString())
+      expect(slice.loadAddress().toString()).toBe(Address.parse(TON_DEPOSIT_ADDRESS).toString())
       expect(slice.loadBit()).toBe(false) // no custom payload
       expect(slice.loadCoins()).toBe(toNano('0.00002')) // forward amount
       expect(slice.loadBit()).toBe(true) // forward payload as ref
@@ -353,58 +323,46 @@ describe('LayerswapProtocolTon', () => {
       expect(forward.loadStringTail()).toBe('ref-jetton')
     })
 
-    test('falls back to options.amount when call_data is unparseable', async () => {
-      global.fetch = buildFetchRouter([
-        NETWORKS_HANDLER,
-        makeCreateSwapHandler({ callData: 'not-json' }),
-        SPEEDUP_HANDLER
-      ])
+    test('prefers the Layerswap call_data amount over the requested amount', async () => {
+      useSwapHandlers(depositAction({ callData: JSON.stringify({ comment: 'ref', amount: '9990000' }) }))
 
-      const { account, sendTransaction } = makeAccount()
-      const p = new LayerswapProtocolTon(account)
+      const account = makeAccount()
+      await new LayerswapProtocolTon(account).swidge(JETTON_SWIDGE_OPTIONS)
 
-      await p.bridge({
-        targetChain: 'ARBITRUM_MAINNET',
-        recipient: '0xa460AEbce0d3A4BecAd8ccf9D6D4861296c503Bd',
-        token: 'USDT',
-        amount: 7_000_000n
-      })
+      const slice = account.sendTransaction.mock.calls[0][0].body.beginParse()
+      slice.loadUint(32)
+      slice.loadUintBig(64)
+      expect(slice.loadCoins()).toBe(9_990_000n)
+    })
 
-      const sent = sendTransaction.mock.calls[0][0]
-      const slice = sent.body.beginParse()
-      slice.loadUint(32)                            // op
-      slice.loadUintBig(64)                         // query id
-      expect(slice.loadCoins()).toBe(7_000_000n)    // fallback to options.amount
+    test.each([
+      ['missing', null],
+      ['not JSON', 'not-json'],
+      ['without a comment', JSON.stringify({ amount: '10000000' })],
+      ['with an empty comment', JSON.stringify({ comment: '', amount: '10000000' })],
+      ['without an amount', JSON.stringify({ comment: 'ref' })],
+      ['with an amount above the requested one', JSON.stringify({ comment: 'ref', amount: '10000001' })]
+    ])('throws a ProviderError, without sending, when call_data is %s', async (_, callData) => {
+      useSwapHandlers(depositAction({ callData }))
+
+      const account = makeAccount()
+
+      await expect(new LayerswapProtocolTon(account).swidge(JETTON_SWIDGE_OPTIONS)).rejects.toThrow(ProviderError)
+      expect(account.sendTransaction).not.toHaveBeenCalled()
     })
   })
 
-  describe('bridge — native (TON)', () => {
-    test('happy path: builds comment body, sends full amount to deposit address', async () => {
-      global.fetch = buildFetchRouter([
-        NETWORKS_HANDLER,
-        makeCreateSwapHandler({
-          callData: JSON.stringify({ comment: 'ref-native' }),
-          tokenSymbol: 'TON'
-        }),
-        SPEEDUP_HANDLER
-      ])
+  describe('deposit message — native', () => {
+    test('sends a comment cell with the call_data amount to the deposit address', async () => {
+      useSwapHandlers(depositAction({ callData: JSON.stringify({ comment: 'ref-native', amount: '1000000000' }) }))
 
-      const { account, sendTransaction, getJettonWalletAddress } = makeAccount()
-      const p = new LayerswapProtocolTon(account)
+      const account = makeAccount()
+      await new LayerswapProtocolTon(account).swidge(NATIVE_SWIDGE_OPTIONS)
 
-      const result = await p.bridge({
-        targetChain: 'ARBITRUM_MAINNET',
-        recipient: '0xa460AEbce0d3A4BecAd8ccf9D6D4861296c503Bd',
-        token: 'TON',
-        destinationToken: 'ETH',
-        amount: 1_000_000_000n
-      })
+      expect(account._getJettonWalletAddress).not.toHaveBeenCalled()
 
-      expect(result.hash).toBe('tonhash-deadbeef')
-      expect(getJettonWalletAddress).not.toHaveBeenCalled()
-
-      const sent = sendTransaction.mock.calls[0][0]
-      expect(sent.to).toBe(TON_DEPOSIT_FRIENDLY)
+      const sent = account.sendTransaction.mock.calls[0][0]
+      expect(sent.to).toBe(TON_DEPOSIT_ADDRESS)
       expect(sent.value).toBe(1_000_000_000n)
 
       const slice = sent.body.beginParse()
@@ -412,507 +370,112 @@ describe('LayerswapProtocolTon', () => {
       expect(slice.loadStringTail()).toBe('ref-native')
     })
 
-    test('tolerates empty / missing call_data with an empty comment', async () => {
-      global.fetch = buildFetchRouter([
-        NETWORKS_HANDLER,
-        makeCreateSwapHandler({ callData: '', tokenSymbol: 'TON' }),
-        SPEEDUP_HANDLER
-      ])
+    test.each([
+      ['empty', ''],
+      ['missing', null]
+    ])('throws a ProviderError, without sending, when call_data is %s', async (_, callData) => {
+      useSwapHandlers(depositAction({ callData }))
 
-      const { account, sendTransaction } = makeAccount()
-      const p = new LayerswapProtocolTon(account)
+      const account = makeAccount()
 
-      await p.bridge({
-        targetChain: 'ARBITRUM_MAINNET',
-        recipient: '0xa460AEbce0d3A4BecAd8ccf9D6D4861296c503Bd',
-        token: 'TON',
-        destinationToken: 'ETH',
-        amount: 1_000_000_000n
-      })
-
-      const sent = sendTransaction.mock.calls[0][0]
-      const slice = sent.body.beginParse()
-      slice.loadUint(32)
-      expect(slice.loadStringTail()).toBe('')
+      await expect(new LayerswapProtocolTon(account).swidge(NATIVE_SWIDGE_OPTIONS)).rejects.toThrow(ProviderError)
+      expect(account.sendTransaction).not.toHaveBeenCalled()
     })
   })
 
-  describe('bridge — guards', () => {
-    test('throws when bridgeFee exceeds bridgeMaxFee, and does not send', async () => {
-      global.fetch = buildFetchRouter([
-        NETWORKS_HANDLER,
-        makeCreateSwapHandler({ totalFee: 1 }), // 1 USDT → 1_000_000 base units
-        SPEEDUP_HANDLER
-      ])
+  describe('deposit action', () => {
+    test('throws a ProviderError when the deposit action has no to_address', async () => {
+      useSwapHandlers(depositAction({ toAddress: '' }))
 
-      const { account, sendTransaction } = makeAccount()
-      const p = new LayerswapProtocolTon(account, { bridgeMaxFee: 500_000n })
-
-      await expect(p.bridge({
-        targetChain: 'ARBITRUM_MAINNET',
-        recipient: '0xa460AEbce0d3A4BecAd8ccf9D6D4861296c503Bd',
-        token: 'USDT',
-        amount: 10_000_000n
-      })).rejects.toThrow(/Exceeded maximum fee/)
-
-      expect(sendTransaction).not.toHaveBeenCalled()
+      await expect(new LayerswapProtocolTon(makeAccount()).swidge(JETTON_SWIDGE_OPTIONS)).rejects.toThrow(ProviderError)
     })
 
-    test('per-call config override of bridgeMaxFee takes precedence', async () => {
-      global.fetch = buildFetchRouter([
-        NETWORKS_HANDLER,
-        makeCreateSwapHandler({ totalFee: 0.5 }),
-        SPEEDUP_HANDLER
-      ])
+    test('throws a ProviderError when the deposit address is malformed', async () => {
+      useSwapHandlers(depositAction({ toAddress: 'not-a-ton-address' }))
 
-      const { account } = makeAccount()
-      const p = new LayerswapProtocolTon(account, { bridgeMaxFee: 10_000_000n })
+      const error = await new LayerswapProtocolTon(makeAccount()).swidge(JETTON_SWIDGE_OPTIONS).catch((err) => err)
 
-      await expect(p.bridge({
-        targetChain: 'ARBITRUM_MAINNET',
-        recipient: '0xa460AEbce0d3A4BecAd8ccf9D6D4861296c503Bd',
-        token: 'USDT',
-        amount: 10_000_000n
-      }, { bridgeMaxFee: 1n })).rejects.toThrow(/Exceeded maximum fee/)
-    })
-
-    test('throws when account is read-only (no sendTransaction)', async () => {
-      const { account } = makeAccount({ writable: false })
-      const p = new LayerswapProtocolTon(account)
-
-      await expect(p.bridge({
-        targetChain: 'ARBITRUM_MAINNET',
-        recipient: '0xa460AEbce0d3A4BecAd8ccf9D6D4861296c503Bd',
-        token: 'USDT',
-        amount: 10_000_000n
-      })).rejects.toThrow(/non read-only account/)
-    })
-
-    test('throws when only non-wallet deposit actions are returned', async () => {
-      global.fetch = buildFetchRouter([
-        NETWORKS_HANDLER,
-        {
-          method: 'POST',
-          match: /^\/api\/v2\/swaps$/,
-          status: 200,
-          body: () => ({
-            data: {
-              swap: { id: 'swap-y', created_date: '', status: 'created', source_network: TON_MAINNET, source_token: TON_MAINNET.tokens[1], destination_network: ARBITRUM_MAINNET, destination_token: ARBITRUM_MAINNET.tokens[0], destination_address: 'r', requested_amount: 10 },
-              deposit_actions: [{
-                amount: 10,
-                amount_in_base_units: '10000000',
-                call_data: '{}',
-                to_address: TON_DEPOSIT_FRIENDLY,
-                token: TON_MAINNET.tokens[1],
-                fee_token: TON_MAINNET.tokens[0],
-                network: TON_MAINNET,
-                order: 0,
-                type: 'manual_transfer'
-              }]
-            }
-          })
-        }
-      ])
-
-      const { account } = makeAccount()
-      const p = new LayerswapProtocolTon(account)
-
-      await expect(p.bridge({
-        targetChain: 'ARBITRUM_MAINNET',
-        recipient: '0xa460AEbce0d3A4BecAd8ccf9D6D4861296c503Bd',
-        token: 'USDT',
-        amount: 10_000_000n
-      })).rejects.toThrow(/manual_transfer.*cannot drive the deposit/)
-    })
-
-    test('throws when source chain equals target chain', async () => {
-      global.fetch = buildFetchRouter([NETWORKS_HANDLER])
-
-      const { account } = makeAccount()
-      const p = new LayerswapProtocolTon(account)
-
-      await expect(p.bridge({
-        targetChain: 'TON_MAINNET',
-        recipient: SENDER_FRIENDLY,
-        token: 'USDT',
-        amount: 10_000_000n
-      })).rejects.toThrow(/cannot be equal/)
-    })
-
-    test('swallows speedup endpoint failures without affecting the result', async () => {
-      global.fetch = buildFetchRouter([
-        NETWORKS_HANDLER,
-        makeCreateSwapHandler(),
-        {
-          method: 'POST',
-          match: /^\/api\/v2\/swaps\/[^/]+\/deposit_speedup$/,
-          status: 500,
-          body: () => ({ error: { code: 'INTERNAL', message: 'speedup unavailable' } })
-        }
-      ])
-
-      const { account } = makeAccount()
-      const p = new LayerswapProtocolTon(account)
-
-      const result = await p.bridge({
-        targetChain: 'ARBITRUM_MAINNET',
-        recipient: '0xa460AEbce0d3A4BecAd8ccf9D6D4861296c503Bd',
-        token: 'USDT',
-        amount: 10_000_000n
-      })
-
-      expect(result.hash).toBe('tonhash-deadbeef')
+      expect(error).toBeInstanceOf(ProviderError)
+      expect(error.message).toMatch(/malformed TON deposit address/)
     })
   })
 
-  describe('_parseCallData', () => {
-    test('parses valid JSON', () => {
-      const { account } = makeAccount()
-      const p = new LayerswapProtocolTon(account)
-      expect(p._parseCallData('{"comment":"hello","amount":"100"}')).toEqual({ comment: 'hello', amount: '100' })
-    })
+  describe('broadcast', () => {
+    test('reports the fee returned by sendTransaction as the source-chain gas', async () => {
+      useSwapHandlers()
 
-    test('returns null for null/undefined/empty', () => {
-      const { account } = makeAccount()
-      const p = new LayerswapProtocolTon(account)
-      expect(p._parseCallData(null)).toBe(null)
-      expect(p._parseCallData(undefined)).toBe(null)
-      expect(p._parseCallData('')).toBe(null)
-    })
+      const result = await new LayerswapProtocolTon(makeAccount()).swidge(JETTON_SWIDGE_OPTIONS)
 
-    test('returns null for non-JSON', () => {
-      const { account } = makeAccount()
-      const p = new LayerswapProtocolTon(account)
-      expect(p._parseCallData('not-json-{}')).toBe(null)
-    })
-  })
-
-  describe('getTransactionStatus', () => {
-    test('defaults the network to TON_MAINNET', async () => {
-      global.fetch = buildFetchRouter([{
-        method: 'GET',
-        match: /^\/api\/v2\/transaction_status\?network=TON_MAINNET&transaction_id=hash-aa$/,
-        status: 200,
-        body: () => ({ data: { status: 'completed' } })
-      }])
-
-      const { account } = makeAccount()
-      const p = new LayerswapProtocolTon(account)
-      await expect(p.getTransactionStatus('hash-aa')).resolves.toEqual({ status: 'completed' })
-    })
-
-    test('honours sourceChain override', async () => {
-      global.fetch = buildFetchRouter([{
-        method: 'GET',
-        match: /^\/api\/v2\/transaction_status\?network=TON_TESTNET&transaction_id=hash-bb$/,
-        status: 200,
-        body: () => ({ data: { status: 'pending' } })
-      }])
-
-      const { account } = makeAccount()
-      const p = new LayerswapProtocolTon(account)
-      await expect(p.getTransactionStatus('hash-bb', { sourceChain: 'TON_TESTNET' }))
-        .resolves.toEqual({ status: 'pending' })
-    })
-  })
-
-  describe('quoteSwidge', () => {
-    test('maps the Layerswap quote to a WDK swidge quote with itemised fees and gas approximation', async () => {
-      global.fetch = buildFetchRouter([NETWORKS_HANDLER, makeQuoteHandler({ avg_completion_time: '00:02:30' })])
-
-      const { account } = makeAccount()
-      const p = new LayerswapProtocolTon(account)
-
-      const quote = await p.quoteSwidge({
-        fromToken: 'USDT',
-        toToken: 'USDT',
-        toChain: 'ARBITRUM_MAINNET',
-        fromTokenAmount: 10_000_000n,
-        slippage: 0.01
-      })
-
-      expect(quote.fromTokenAmount).toBe(10_000_000n)
-      expect(quote.toTokenAmount).toBe(9_500_000n)
-      expect(quote.toTokenAmountMin).toBe(9_400_000n)
-      expect(quote.estimatedDuration).toBe(150)
-      expect(quote.fees).toEqual([
-        expect.objectContaining({ type: 'protocol', amount: 50_000n, token: 'USDT', included: true }),
-        expect.objectContaining({ type: 'network', amount: 450_000n, token: 'USDT', included: true }),
-        // Jetton gas approximation: 0.05 TON = 50_000_000n nanotons.
-        expect.objectContaining({ type: 'network', amount: 50_000_000n, token: 'TON', included: false })
-      ])
-    })
-
-    test('uses the native gas approximation for TON source quotes', async () => {
-      global.fetch = buildFetchRouter([NETWORKS_HANDLER, QUOTE_HANDLER])
-
-      const { account } = makeAccount()
-      const p = new LayerswapProtocolTon(account)
-
-      const quote = await p.quoteSwidge({
-        fromToken: 'TON',
-        toToken: 'ETH',
-        toChain: 'ARBITRUM_MAINNET',
-        fromTokenAmount: 1_000_000_000n
-      })
-
-      const gas = quote.fees.find((f) => !f.included)
-      expect(gas).toEqual(expect.objectContaining({
-        type: 'network',
-        amount: 10_000_000n, // 0.01 TON
-        token: 'TON',
-        chain: 'TON_MAINNET'
-      }))
-    })
-
-    test('omits the gas entry when no account is bound (discovery-mode quote)', async () => {
-      global.fetch = buildFetchRouter([NETWORKS_HANDLER, QUOTE_HANDLER])
-
-      const p = new LayerswapProtocolTon(undefined)
-
-      const quote = await p.quoteSwidge({
-        fromToken: 'USDT',
-        toToken: 'USDT',
-        toChain: 'ARBITRUM_MAINNET',
-        fromTokenAmount: 10_000_000n
-      })
-
-      expect(quote.fees).toHaveLength(2)
-      expect(quote.fees.every((f) => f.included)).toBe(true)
-    })
-
-    test('converts the WDK decimal slippage to a Layerswap percent string', async () => {
-      const fetchMock = buildFetchRouter([NETWORKS_HANDLER, QUOTE_HANDLER])
-      global.fetch = fetchMock
-
-      const { account } = makeAccount()
-      const p = new LayerswapProtocolTon(account)
-
-      await p.quoteSwidge({
-        fromToken: 'USDT',
-        toChain: 'ARBITRUM_MAINNET',
-        fromTokenAmount: 10_000_000n,
-        slippage: 0.005
-      })
-
-      const quoteCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/api/v2/quote'))
-      expect(String(quoteCall[0])).toContain('slippage=0.5')
-    })
-
-    test('rejects exact-out operations', async () => {
-      global.fetch = buildFetchRouter([NETWORKS_HANDLER])
-
-      const { account } = makeAccount()
-      const p = new LayerswapProtocolTon(account)
-
-      await expect(p.quoteSwidge({
-        fromToken: 'USDT',
-        toChain: 'ARBITRUM_MAINNET',
-        toTokenAmount: 10_000_000n
-      })).rejects.toThrow('exact-in')
-    })
-
-    test('rejects same-chain swaps (toChain missing)', async () => {
-      global.fetch = buildFetchRouter([NETWORKS_HANDLER])
-
-      const { account } = makeAccount()
-      const p = new LayerswapProtocolTon(account)
-
-      await expect(p.quoteSwidge({
-        fromToken: 'USDT',
-        toToken: 'TON',
-        fromTokenAmount: 10_000_000n
-      })).rejects.toThrow('same-chain')
-    })
-  })
-
-  describe('swidge', () => {
-    test('creates the swap, sends the jetton deposit, and returns a WDK swidge result', async () => {
-      global.fetch = buildFetchRouter([
-        NETWORKS_HANDLER,
-        makeCreateSwapHandler(),
-        SPEEDUP_HANDLER
-      ])
-
-      const { account, sendTransaction } = makeAccount()
-      const p = new LayerswapProtocolTon(account)
-
-      const result = await p.swidge({
-        fromToken: 'USDT',
-        toToken: 'USDT',
-        toChain: 'ARBITRUM_MAINNET',
-        recipient: '0xa460AEbce0d3A4BecAd8ccf9D6D4861296c503Bd',
-        fromTokenAmount: 10_000_000n
-      })
-
-      expect(result.id).toBe('swap-ton-123')
-      expect(result.hash).toBe('tonhash-deadbeef')
-      expect(result.fromTokenAmount).toBe(10_000_000n)
-      expect(result.toTokenAmount).toBe(9_500_000n)
-      expect(result.toTokenAmountMin).toBe(9_450_000n)
+      expect(result).toMatchObject({ id: 'swap-ton-123', hash: 'tonhash-deadbeef' })
       expect(result.transactions).toEqual([{ hash: 'tonhash-deadbeef', chain: 'TON_MAINNET', type: 'source' }])
-      expect(result.fees).toEqual([
-        expect.objectContaining({ type: 'protocol', amount: 50_000n, token: 'USDT', included: true }),
-        expect.objectContaining({ type: 'network', amount: 450_000n, token: 'USDT', included: true }),
-        // Actual gas from sendTransaction's return value, in nanotons.
-        expect.objectContaining({ type: 'network', amount: 12_345_000n, token: 'TON', included: false })
-      ])
-
-      const sent = sendTransaction.mock.calls[0][0]
-      expect(sent.to).toBe(Address.parse(SENDER_JETTON_WALLET).toString())
-      expect(sent.value).toBe(toNano('0.045'))
-      expect(sent.body).toBeInstanceOf(Cell)
+      expect(result.fees.at(-1)).toEqual({ type: 'network', amount: 12_345_000n, token: 'TON', chain: 'TON_MAINNET', included: false, description: 'Source-chain gas' })
     })
 
-    test('defaults the recipient to the account address for same-VM destinations', async () => {
-      const fetchMock = buildFetchRouter([
-        NETWORKS_HANDLER,
-        makeCreateSwapHandler(),
-        SPEEDUP_HANDLER
-      ])
-      global.fetch = fetchMock
+    test('bridge happy path returns the deposit hash, gas fee, Layerswap fee and swap id', async () => {
+      useSwapHandlers()
 
-      const { account } = makeAccount()
-      const p = new LayerswapProtocolTon(account)
-
-      await p.swidge({
-        fromToken: 'USDT',
-        toChain: 'TON_TESTNET',
-        fromTokenAmount: 10_000_000n
+      const result = await new LayerswapProtocolTon(makeAccount()).bridge({
+        targetChain: 'ARBITRUM_MAINNET',
+        recipient: EVM_RECIPIENT,
+        token: 'USDT',
+        amount: 10_000_000n
       })
 
-      const createCall = fetchMock.mock.calls.find(([, init]) => init && init.method === 'POST' && init.body.includes('destination_address'))
-      expect(JSON.parse(createCall[1].body).destination_address).toBe(SENDER_FRIENDLY)
-    })
-
-    test('requires an explicit recipient for cross-VM destinations', async () => {
-      global.fetch = buildFetchRouter([NETWORKS_HANDLER])
-
-      const { account, sendTransaction } = makeAccount()
-      const p = new LayerswapProtocolTon(account)
-
-      await expect(p.swidge({
-        fromToken: 'USDT',
-        toToken: 'USDT',
-        toChain: 'ARBITRUM_MAINNET',
-        fromTokenAmount: 10_000_000n
-      })).rejects.toThrow(/recipient/)
-
-      expect(sendTransaction).not.toHaveBeenCalled()
-    })
-
-    test('enforces maxProtocolFeeBps and does not send', async () => {
-      global.fetch = buildFetchRouter([
-        NETWORKS_HANDLER,
-        makeCreateSwapHandler()
-      ])
-
-      const { account, sendTransaction } = makeAccount()
-      const p = new LayerswapProtocolTon(account)
-
-      // service_fee 0.05 on 10 USDT = 50 bps.
-      await expect(p.swidge({
-        fromToken: 'USDT',
-        toToken: 'USDT',
-        toChain: 'ARBITRUM_MAINNET',
-        recipient: '0xa460AEbce0d3A4BecAd8ccf9D6D4861296c503Bd',
-        fromTokenAmount: 10_000_000n
-      }, { maxProtocolFeeBps: 49 })).rejects.toThrow('maximum protocol fee')
-
-      expect(sendTransaction).not.toHaveBeenCalled()
-    })
-
-    test('throws when the quoted minimum output is below minAmountOut', async () => {
-      global.fetch = buildFetchRouter([
-        NETWORKS_HANDLER,
-        makeCreateSwapHandler()
-      ])
-
-      const { account, sendTransaction } = makeAccount()
-      const p = new LayerswapProtocolTon(account)
-
-      // Create-swap quote min receive is 9.45 USDT = 9_450_000 base units.
-      await expect(p.swidge({
-        fromToken: 'USDT',
-        toToken: 'USDT',
-        toChain: 'ARBITRUM_MAINNET',
-        recipient: '0xa460AEbce0d3A4BecAd8ccf9D6D4861296c503Bd',
-        fromTokenAmount: 10_000_000n,
-        minAmountOut: 9_500_000n
-      })).rejects.toThrow('minAmountOut')
-
-      expect(sendTransaction).not.toHaveBeenCalled()
-    })
-
-    test('throws for read-only accounts', async () => {
-      const { account } = makeAccount({ writable: false })
-      const p = new LayerswapProtocolTon(account)
-
-      await expect(p.swidge({
-        fromToken: 'USDT',
-        toChain: 'ARBITRUM_MAINNET',
-        fromTokenAmount: 10_000_000n
-      })).rejects.toThrow(/non read-only account/)
+      expect(result).toEqual({ hash: 'tonhash-deadbeef', fee: 12_345_000n, bridgeFee: 500_000n, swapId: 'swap-ton-123' })
     })
   })
 
-  describe('getSwidgeStatus', () => {
-    test('maps the Layerswap swap status and transactions to the WDK vocabulary', async () => {
-      global.fetch = buildFetchRouter([{
-        method: 'GET',
-        match: /^\/api\/v2\/swaps\/swap-ton-123$/,
-        status: 200,
-        body: () => ({
-          data: {
-            swap: {
-              id: 'swap-ton-123',
-              status: 'ls_transfer_pending',
-              transactions: [
-                { transaction_hash: 'tonhash-input', type: 'input', status: 'completed', network: TON_MAINNET },
-                { transaction_hash: '0xoutput', type: 'output', status: 'initiated', network: ARBITRUM_MAINNET }
-              ]
-            }
-          }
-        })
-      }])
+  describe('wallet errors', () => {
+    test('maps the "not connected to ton center" failure to a ProviderRequiredError', async () => {
+      useSwapHandlers()
 
-      const { account } = makeAccount()
-      const p = new LayerswapProtocolTon(account)
+      const account = makeAccount()
+      account.sendTransaction.mockRejectedValue(new Error('The wallet must be connected to ton center to send transactions.'))
 
-      await expect(p.getSwidgeStatus('swap-ton-123')).resolves.toEqual({
-        status: 'pending',
-        transactions: [
-          { hash: 'tonhash-input', chain: 'TON_MAINNET', type: 'source' },
-          { hash: '0xoutput', chain: 'ARBITRUM_MAINNET', type: 'destination' }
-        ]
-      })
+      await expect(new LayerswapProtocolTon(account).swidge(JETTON_SWIDGE_OPTIONS)).rejects.toThrow(ProviderRequiredError)
+    })
+
+    test('maps the transaction max-fee failure to a MaximumFeeExceededError', async () => {
+      useSwapHandlers()
+
+      const account = makeAccount()
+      account.sendTransaction.mockRejectedValue(new Error('Exceeded maximum fee cost for transaction operation.'))
+
+      await expect(new LayerswapProtocolTon(account).swidge(JETTON_SWIDGE_OPTIONS)).rejects.toThrow(MaximumFeeExceededError)
+    })
+
+    test('wraps other wallet failures in a ProviderError', async () => {
+      useSwapHandlers()
+
+      const account = makeAccount()
+      account._getJettonWalletAddress.mockRejectedValue(new Error('toncenter exploded'))
+
+      const error = await new LayerswapProtocolTon(account).swidge(JETTON_SWIDGE_OPTIONS).catch((err) => err)
+
+      expect(error).toBeInstanceOf(ProviderError)
+      expect(error.message).toMatch('toncenter exploded')
     })
   })
 
-  describe('discovery', () => {
-    test('getSupportedChains maps the network catalog without an account', async () => {
-      global.fetch = buildFetchRouter([NETWORKS_HANDLER])
-
-      const p = new LayerswapProtocolTon(undefined)
-
-      await expect(p.getSupportedChains()).resolves.toEqual([
-        { id: 'TON_MAINNET', name: 'TON_MAINNET', type: 'ton', nativeToken: '' },
-        { id: 'ARBITRUM_MAINNET', name: 'ARBITRUM_MAINNET', type: 'evm', nativeToken: '' },
-        { id: 'TON_TESTNET', name: 'TON_TESTNET', type: 'ton', nativeToken: '' }
-      ])
+  describe('accounts', () => {
+    test('throws an AccountRequiredError for read-only accounts (no sendTransaction)', async () => {
+      await expect(new LayerswapProtocolTon(makeAccount({ writable: false })).swidge(JETTON_SWIDGE_OPTIONS))
+        .rejects.toThrow(AccountRequiredError)
     })
 
-    test('getSupportedTokens flattens and scopes by chain', async () => {
-      global.fetch = buildFetchRouter([NETWORKS_HANDLER])
+    test('throws a DisposalError when the account reports it has been disposed', async () => {
+      const account = makeAccount()
+      account.disposed = true
 
-      const p = new LayerswapProtocolTon(undefined)
+      await expect(new LayerswapProtocolTon(account).swidge(JETTON_SWIDGE_OPTIONS)).rejects.toThrow(DisposalError)
+      expect(account.sendTransaction).not.toHaveBeenCalled()
+    })
 
-      const tokens = await p.getSupportedTokens({ toChain: 'TON_MAINNET' })
-      expect(tokens).toHaveLength(2)
-      expect(tokens.every((t) => t.chain === 'TON_MAINNET')).toBe(true)
+    test('throws a DisposalError when the account private key has been erased', async () => {
+      const account = makeAccount()
+      account.keyPair = { publicKey: new Uint8Array(32), privateKey: null }
 
-      const usdt = tokens.find((t) => t.symbol === 'USDT')
-      expect(usdt.address).toBe(TON_JETTON_USDT_MASTER)
+      await expect(new LayerswapProtocolTon(account).swidge(JETTON_SWIDGE_OPTIONS)).rejects.toThrow(DisposalError)
     })
   })
 })

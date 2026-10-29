@@ -127,6 +127,7 @@ function buildSwidgeOptions (cfg, address) {
     fromChain: cfg.sourceChainOverride,
     recipient: cfg.recipient ?? address,
     fromTokenAmount: BigInt(cfg.amountStr),
+    ...(cfg.refuel ? { refuel: true } : {}),
     ...(cfg.btcFeeRate ? { feeRate: BigInt(cfg.btcFeeRate) } : {})
   }
 }
@@ -263,8 +264,8 @@ async function cmdSwidge (vm) {
       })
       inputTxStatus = txStatus?.status ?? inputTxStatus
     } catch (err) {
-      // NOT_FOUND while Layerswap is still indexing — keep waiting.
-      if (!/NOT_FOUND/.test(err.message)) {
+      // NoSuchElementError while Layerswap is still indexing — keep waiting.
+      if (err.name !== 'NoSuchElementError') {
         console.warn('   txstatus poll error:', err.message)
       }
     }

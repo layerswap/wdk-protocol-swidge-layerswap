@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/** @typedef {import('@tetherto/wdk-wallet/protocols').BridgeResult} BridgeResult */
+/** @typedef {import('@tetherto/wdk-wallet-solana').WalletAccountSolana} WalletAccountSolana */
+/** @typedef {import('@tetherto/wdk-wallet-solana').WalletAccountReadOnlySolana} WalletAccountReadOnlySolana */
 
-/** @typedef {import('./src/layerswap-protocol-solana.js').LayerswapProtocolConfig} LayerswapProtocolConfig */
+/** @typedef {import('@solana/kit').BaseTransactionMessage} SolanaTransactionMessage */
 
-/** @typedef {import('./src/layerswap-protocol-solana.js').BridgeOptions} BridgeOptions */
-
-/** @typedef {import('./src/layerswap-protocol-solana.js').LayerswapBridgeResult} LayerswapBridgeResult */
+/** @typedef {import('./src/layerswap-protocol-solana.js').LayerswapSolanaPreparedDeposit} LayerswapSolanaPreparedDeposit */
 
 export { default } from './src/layerswap-protocol-solana.js'
+
+export * from '@layerswap/wdk-protocol-swidge-layerswap-core/protocol'

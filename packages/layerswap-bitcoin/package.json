@@ -14,6 +14,12 @@
   "author": "Aren <aren@bransfer.io>",
   "license": "Apache-2.0",
   "main": "index.js",
+  "files": [
+    "index.js",
+    "bare.js",
+    "src/",
+    "types/"
+  ],
   "type": "module",
   "scripts": {
     "build:types": "tsc",
@@ -26,17 +32,14 @@
     "@bitcoinerlab/coinselect": "2.0.1",
     "@bitcoinerlab/descriptors": "3.1.7",
     "@layerswap/wdk-protocol-swidge-layerswap-core": "workspace:*",
+    "@tetherto/wdk-wallet": "1.0.0-beta.25",
+    "@tetherto/wdk-wallet-btc": "1.0.0-beta.17",
     "bare-node-runtime": "^1.5.0",
     "bitcoinjs-lib": "7.0.1"
   },
-  "peerDependencies": {
-    "@tetherto/wdk-wallet": ">=1.0.0-beta.17",
-    "@tetherto/wdk-wallet-btc": ">=1.0.0-beta.14"
-  },
   "devDependencies": {
     "@jest/globals": "30.4.1",
-    "@tetherto/wdk-wallet": "1.0.0-beta.17",
-    "@tetherto/wdk-wallet-btc": "1.0.0-beta.14",
+    "@layerswap/wdk-protocol-swidge-layerswap-test-utils": "workspace:*",
     "bip32": "5.0.1",
     "cross-env": "10.1.0",
     "jest": "30.4.2",

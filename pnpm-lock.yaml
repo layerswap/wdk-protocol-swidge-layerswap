@@ -38,20 +38,20 @@ importers:
         specifier: workspace:*
         version: link:../../packages/layerswap-ton
       '@tetherto/wdk-wallet':
-        specifier: 1.0.0-beta.17
-        version: 1.0.0-beta.17(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
+        specifier: 1.0.0-beta.25
+        version: 1.0.0-beta.25(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
       '@tetherto/wdk-wallet-btc':
-        specifier: 1.0.0-beta.14
-        version: 1.0.0-beta.14(bare-url@2.4.3)(typescript@7.0.2)
-      '@tetherto/wdk-wallet-evm':
         specifier: 1.0.0-beta.17
-        version: 1.0.0-beta.17(bare-url@2.4.3)(bufferutil@4.1.0)(utf-8-validate@6.0.6)
+        version: 1.0.0-beta.17(@noble/curves@2.3.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))(bare-url@2.4.3)(typescript@7.0.2)
+      '@tetherto/wdk-wallet-evm':
+        specifier: 1.0.0-beta.24
+        version: 1.0.0-beta.24(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))(bare-url@2.4.3)(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       '@tetherto/wdk-wallet-solana':
-        specifier: 1.0.0-beta.13
-        version: 1.0.0-beta.13(@solana/kit@4.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)(ws@8.21.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(bare-url@2.4.3)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)
+        specifier: 1.0.0-beta.20
+        version: 1.0.0-beta.20(@solana/kit@4.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)(ws@8.21.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))(bare-url@2.4.3)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)
       '@tetherto/wdk-wallet-ton':
-        specifier: 1.0.0-beta.13
-        version: 1.0.0-beta.13(@ton/core@0.63.1(@ton/crypto@3.3.0))(bare-url@2.4.3)
+        specifier: 1.0.0-beta.17
+        version: 1.0.0-beta.17(@ton/core@0.63.1(@ton/crypto@3.3.0))(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))(bare-url@2.4.3)
 
   packages/layerswap-bitcoin:
     dependencies:
@@ -64,6 +64,12 @@ importers:
       '@layerswap/wdk-protocol-swidge-layerswap-core':
         specifier: workspace:*
         version: link:../layerswap-core
+      '@tetherto/wdk-wallet':
+        specifier: 1.0.0-beta.25
+        version: 1.0.0-beta.25(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
+      '@tetherto/wdk-wallet-btc':
+        specifier: 1.0.0-beta.17
+        version: 1.0.0-beta.17(@noble/curves@2.3.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))(bare-url@2.4.3)(typescript@7.0.2)
       bare-node-runtime:
         specifier: ^1.5.0
         version: 1.5.0(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
@@ -74,12 +80,9 @@ importers:
       '@jest/globals':
         specifier: 30.4.1
         version: 30.4.1
-      '@tetherto/wdk-wallet':
-        specifier: 1.0.0-beta.17
-        version: 1.0.0-beta.17(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
-      '@tetherto/wdk-wallet-btc':
-        specifier: 1.0.0-beta.14
-        version: 1.0.0-beta.14(@noble/curves@2.3.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))(bare-url@2.4.3)(typescript@7.0.2)
+      '@layerswap/wdk-protocol-swidge-layerswap-test-utils':
+        specifier: workspace:*
+        version: link:../layerswap-test-utils
       bip32:
         specifier: 5.0.1
         version: 5.0.1(typescript@7.0.2)
@@ -98,6 +101,9 @@ importers:
 
   packages/layerswap-core:
     dependencies:
+      '@tetherto/wdk-wallet':
+        specifier: 1.0.0-beta.25
+        version: 1.0.0-beta.25(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
       bare-node-runtime:
         specifier: ^1.5.0
         version: 1.5.0(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
@@ -105,6 +111,9 @@ importers:
       '@jest/globals':
         specifier: 30.4.1
         version: 30.4.1
+      '@layerswap/wdk-protocol-swidge-layerswap-test-utils':
+        specifier: workspace:*
+        version: link:../layerswap-test-utils
       cross-env:
         specifier: 10.1.0
         version: 10.1.0
@@ -123,6 +132,15 @@ importers:
       '@layerswap/wdk-protocol-swidge-layerswap-core':
         specifier: workspace:*
         version: link:../layerswap-core
+      '@tetherto/wdk-wallet':
+        specifier: 1.0.0-beta.25
+        version: 1.0.0-beta.25(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
+      '@tetherto/wdk-wallet-evm':
+        specifier: 1.0.0-beta.24
+        version: 1.0.0-beta.24(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))(bare-url@2.4.3)(bufferutil@4.1.0)(utf-8-validate@6.0.6)
+      '@tetherto/wdk-wallet-evm-erc-4337':
+        specifier: 1.0.0-beta.23
+        version: 1.0.0-beta.23(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))(bare-url@2.4.3)(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       bare-node-runtime:
         specifier: ^1.5.0
         version: 1.5.0(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
@@ -133,15 +151,9 @@ importers:
       '@jest/globals':
         specifier: 30.4.1
         version: 30.4.1
-      '@tetherto/wdk-wallet':
-        specifier: 1.0.0-beta.17
-        version: 1.0.0-beta.17(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
-      '@tetherto/wdk-wallet-evm':
-        specifier: 1.0.0-beta.17
-        version: 1.0.0-beta.17(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))(bare-url@2.4.3)(bufferutil@4.1.0)(utf-8-validate@6.0.6)
-      '@tetherto/wdk-wallet-evm-erc-4337':
-        specifier: 1.0.0-beta.16
-        version: 1.0.0-beta.16(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))(bare-url@2.4.3)(bufferutil@4.1.0)(utf-8-validate@6.0.6)
+      '@layerswap/wdk-protocol-swidge-layerswap-test-utils':
+        specifier: workspace:*
+        version: link:../layerswap-test-utils
       cross-env:
         specifier: 10.1.0
         version: 10.1.0
@@ -160,9 +172,15 @@ importers:
       '@layerswap/wdk-protocol-swidge-layerswap-core':
         specifier: workspace:*
         version: link:../layerswap-core
-      '@solana/web3.js':
-        specifier: 1.98.4
-        version: 1.98.4(bufferutil@4.1.0)(typescript@7.0.2)(utf-8-validate@6.0.6)
+      '@solana/kit':
+        specifier: 4.0.0
+        version: 4.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)(ws@8.21.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))
+      '@tetherto/wdk-wallet':
+        specifier: 1.0.0-beta.25
+        version: 1.0.0-beta.25(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
+      '@tetherto/wdk-wallet-solana':
+        specifier: 1.0.0-beta.20
+        version: 1.0.0-beta.20(@solana/kit@4.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)(ws@8.21.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))(bare-url@2.4.3)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)
       bare-node-runtime:
         specifier: ^1.5.0
         version: 1.5.0(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
@@ -170,12 +188,12 @@ importers:
       '@jest/globals':
         specifier: 30.4.1
         version: 30.4.1
-      '@tetherto/wdk-wallet':
-        specifier: 1.0.0-beta.17
-        version: 1.0.0-beta.17(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
-      '@tetherto/wdk-wallet-solana':
-        specifier: 1.0.0-beta.13
-        version: 1.0.0-beta.13(@solana/kit@4.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)(ws@8.21.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))(bare-url@2.4.3)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)
+      '@layerswap/wdk-protocol-swidge-layerswap-test-utils':
+        specifier: workspace:*
+        version: link:../layerswap-test-utils
+      '@solana/web3.js':
+        specifier: 1.98.4
+        version: 1.98.4(bufferutil@4.1.0)(typescript@7.0.2)(utf-8-validate@6.0.6)
       cross-env:
         specifier: 10.1.0
         version: 10.1.0
@@ -192,24 +210,30 @@ importers:
         specifier: 8.21.3
         version: 8.21.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)
 
+  packages/layerswap-test-utils:
+    dependencies:
+      '@jest/globals':
+        specifier: 30.4.1
+        version: 30.4.1
+      msw:
+        specifier: 2.15.0
+        version: 2.15.0(@types/node@25.9.1)(typescript@7.0.2)
+    devDependencies:
+      standard:
+        specifier: 17.1.2
+        version: 17.1.2
+
   packages/layerswap-ton:
     dependencies:
       '@layerswap/wdk-protocol-swidge-layerswap-core':
         specifier: workspace:*
         version: link:../layerswap-core
-      bare-node-runtime:
-        specifier: ^1.5.0
-        version: 1.5.0(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
-    devDependencies:
-      '@jest/globals':
-        specifier: 30.4.1
-        version: 30.4.1
       '@tetherto/wdk-wallet':
-        specifier: 1.0.0-beta.17
-        version: 1.0.0-beta.17(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
+        specifier: 1.0.0-beta.25
+        version: 1.0.0-beta.25(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
       '@tetherto/wdk-wallet-ton':
-        specifier: 1.0.0-beta.13
-        version: 1.0.0-beta.13(@ton/core@0.63.1(@ton/crypto@3.3.0))(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))(bare-url@2.4.3)
+        specifier: 1.0.0-beta.17
+        version: 1.0.0-beta.17(@ton/core@0.63.1(@ton/crypto@3.3.0))(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))(bare-url@2.4.3)
       '@ton/core':
         specifier: 0.63.1
         version: 0.63.1(@ton/crypto@3.3.0)
@@ -217,8 +241,18 @@ importers:
         specifier: 3.3.0
         version: 3.3.0
       '@ton/ton':
-        specifier: 16.3.0
-        version: 16.3.0(@ton/core@0.63.1(@ton/crypto@3.3.0))(@ton/crypto@3.3.0)
+        specifier: 16.2.4
+        version: 16.2.4(@ton/core@0.63.1(@ton/crypto@3.3.0))(@ton/crypto@3.3.0)
+      bare-node-runtime:
+        specifier: ^1.5.0
+        version: 1.5.0(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
+    devDependencies:
+      '@jest/globals':
+        specifier: 30.4.1
+        version: 30.4.1
+      '@layerswap/wdk-protocol-swidge-layerswap-test-utils':
+        specifier: workspace:*
+        version: link:../layerswap-test-utils
       cross-env:
         specifier: 10.1.0
         version: 10.1.0
@@ -525,6 +559,41 @@ packages:
     resolution: {integrity: sha512-93zYdMES/c1D69yZiKDBj0V24vqNzB/koF26KPaagAfd3P/4gUlh3Dys5ogAK+Exi9QyzlD8x/08Zt7wIKcDcA==}
     deprecated: Use @eslint/object-schema instead
 
+  '@inquirer/ansi@2.0.10':
+    resolution: {integrity: sha512-dwrc+1aqVZpHNkNDswXGtn1typ+Pxpo5FHZRyBw1le7onEJUkPUkYOY1FIFC1LvFMYUqqLuWBwElhAmencL7MQ==}
+    engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
+
+  '@inquirer/confirm@6.3.5':
+    resolution: {integrity: sha512-BJ59BOyURiZiAxdr9AuRu38/k+rV+DcTIM2fUF/c/BXrab6H8zMZTTOl3LgkSJH96Xob2vOJxDiBkHiz32Xx2w==}
+    engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
+    peerDependencies:
+      '@types/node': '>=18'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+
+  '@inquirer/core@12.0.6':
+    resolution: {integrity: sha512-5yxn2LsJ8Tu4ei2a+yNkmFRhM/cb+JMEsEs/AW6CCOnBnpMy4IjYiPMFyHtYq8weOmlTyqqCx40y0DsD7OsEPw==}
+    engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
+    peerDependencies:
+      '@types/node': '>=18'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+
+  '@inquirer/figures@2.0.10':
+    resolution: {integrity: sha512-51elrUJV3jZpvD0ygz8+U10Kc6+Lzqln+/tYmnbhy6jo5oXpE6hMCcv+OTBC0enwJXsb3JIuT3VtEinRNCSK2A==}
+    engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
+
+  '@inquirer/type@4.2.1':
+    resolution: {integrity: sha512-lDkPsnv5M5CcYB2T1qTc3dobNTPkVr4DU3Ic2Q6SW8/qVRHgvzdRdmVZ6YqG9Ag1aJTeMsLU0s0WPRh3CZWDQQ==}
+    engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
+    peerDependencies:
+      '@types/node': '>=18'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+
   '@isaacs/cliui@8.0.2':
     resolution: {integrity: sha512-O8jcjabXaleOG9DQ0+ARXWZBTfnP4WNAqzuiJK7ll44AmxGKv/J2M4TPjxjY3znBCfvBXFzucm1twdyFybFqEA==}
     engines: {node: '>=12'}
@@ -639,6 +708,10 @@ packages:
     resolution: {integrity: sha512-mlvPiCzUlaETpYW3i6V87A24jjMYgsebaXtUo3WQyyLnYUuxs0KiXQ2mnKh3h15j8Xg/hfxeGIi+5OC9u0nftQ==}
     engines: {node: '>=6'}
 
+  '@mswjs/interceptors@0.41.9':
+    resolution: {integrity: sha512-VVPPgHyQ6ShqnrmDWuxjmUIsO9gWyOZFmuOfLd9LfBGQJwZfy0gvv9pbHSJuoFNIYC7ZDX9aoFwowjcdSC4E8w==}
+    engines: {node: '>=18'}
+
   '@napi-rs/wasm-runtime@1.1.4':
     resolution: {integrity: sha512-3NQNNgA1YSlJb/kMH1ildASP9HW7/7kYnRI2szWJaofaS1hWmbGI4H+d3+22aGzXXN9IJ+n+GiFVcGipJP18ow==}
     peerDependencies:
@@ -694,6 +767,18 @@ packages:
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
 
+  '@open-draft/deferred-promise@2.2.0':
+    resolution: {integrity: sha512-CecwLWx3rhxVQF6V4bAgPS5t+So2sTbPgAzafKkVizyi7tlwpcFpdFqq+wqF2OwNBmqFuu6tOyouTuxgpMfzmA==}
+
+  '@open-draft/deferred-promise@3.0.0':
+    resolution: {integrity: sha512-XW375UK8/9SqUVNVa6M0yEy8+iTi4QN5VZ7aZuRFQmy76LRwI9wy5F4YIBU6T+eTe2/DNDo8tqu8RHlwLHM6RA==}
+
+  '@open-draft/logger@0.3.0':
+    resolution: {integrity: sha512-X2g45fzhxH238HKO4xbSr7+wBS8Fvw6ixhTDuvLd5mqh6bJJCFAPwU9mPDxbcrRtfxv4u5IHCEH77BmxvXmmxQ==}
+
+  '@open-draft/until@2.1.0':
+    resolution: {integrity: sha512-U69T3ItWHvLwGg5eJ0n3I62nWuE6ilHlmz7zM0npLBRvPRd7e6NYmg54vvRtP5mZG7kZqZCFVdsTWo7BPtBujg==}
+
   '@pkgjs/parseargs@0.11.0':
     resolution: {integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==}
     engines: {node: '>=14'}
@@ -716,6 +801,11 @@ packages:
 
   '@sinonjs/fake-timers@15.4.0':
     resolution: {integrity: sha512-DsG+8/LscQIQg68J6Ef3dv10u6nVyetYn923s3/sus5eaGfTo1of5WMZSLf0UJc9KDuKPilPH0UDJCjvNbDNCA==}
+
+  '@solana-program/memo@0.9.0':
+    resolution: {integrity: sha512-I544p9gFeaguGbM+U09tjc9Prbs71vh7votxRahEoiOlxVID9NtZTah4KQnL0jK7JboxFxXo4+VOBaIE3HYPOw==}
+    peerDependencies:
+      '@solana/kit': ^4.0
 
   '@solana-program/system@0.9.0':
     resolution: {integrity: sha512-yu+i0SZ+c+0E9Cy+btoMiCbxRnP/FLQuv/Ba8l2klZApAiOX1Ja/2IGkctFV36fglsI7PwD9czkSkHm8og+QeA==}
@@ -1136,23 +1226,35 @@ packages:
   '@tetherto/wdk-failover-provider@1.0.0-beta.2':
     resolution: {integrity: sha512-G1KNpw11Hql7Q6Xy5oqO+8P+AkJi4QBTK4JZtZvcXmx8ze+d/lzSQSufWLE/k5YAvwJ+xDx7mRzy/teG4zaiOw==}
 
-  '@tetherto/wdk-wallet-btc@1.0.0-beta.14':
-    resolution: {integrity: sha512-9YYvkLfDPS2XuZ+qvwxPS3/39yp1Z/5CkPdF7Esy2F4/eS1yTiduaWBYGC6PajG41o+B/gh0LibukSNjRlacAg==}
+  '@tetherto/wdk-wallet-btc@1.0.0-beta.17':
+    resolution: {integrity: sha512-NJacEJPLm7vBb7d50o/YuQWAlr7VVSGan4e98GfVyU0m23cKf9b/uU6jLBR9z0XDcEQWFicL4K/EgiFRei1KCg==}
 
-  '@tetherto/wdk-wallet-evm-erc-4337@1.0.0-beta.16':
-    resolution: {integrity: sha512-v97jk+e9pEK+U+i9mBYXO/ybzykwhtpXE/IBDfrKZ/jKkZ5uJ0wsixXjk2EH5N08lEy3wXiiZ5BcU4PLLf3UWg==}
+  '@tetherto/wdk-wallet-evm-erc-4337@1.0.0-beta.23':
+    resolution: {integrity: sha512-RRpmLrwzxQCB8HoplwTYODCso0UtmlVzukZ39mjmHk8wZdxMmRqDPL9dOZkGrkowqPxlb0dgGqUFguXIFDRd1Q==}
 
-  '@tetherto/wdk-wallet-evm@1.0.0-beta.17':
-    resolution: {integrity: sha512-0nLdpGRURSd6cmzgVz3l7cdt7bwd5Pdtutt1evpw0u2YxjNGDjDDGMss1l8/kLJxk58QLQjxCvM7IlxzlqGKLQ==}
+  '@tetherto/wdk-wallet-evm@1.0.0-beta.19':
+    resolution: {integrity: sha512-/lF+2t0zgZZ9DvDuDeCP2tWwimE5ZvEI5JEEmFeC/UJAUd366OJ5LCRwlPjd3Tpn/nMgql2h7EnzrecbIZjF/w==}
 
-  '@tetherto/wdk-wallet-solana@1.0.0-beta.13':
-    resolution: {integrity: sha512-X06dWRYLiXeX5H6P/5TzRjr/4GtJKU2VFtjBlTsFIIbKs0bmN1pJw+eXeWql28oM2ZrlbqLhqz4moBkRsSfHpQ==}
+  '@tetherto/wdk-wallet-evm@1.0.0-beta.24':
+    resolution: {integrity: sha512-qgxJn8O6UGimmq/5pdl8Wcwvn3VPCKHXPF4cG7heJU2Q9mVzsYL5IY75gTdD5APdpX+Rzf01s91Bd1EIJqZQnw==}
 
-  '@tetherto/wdk-wallet-ton@1.0.0-beta.13':
-    resolution: {integrity: sha512-hSlfTbtsoiEcxg91FoaSnxFw8z4p7LYXIqxKO3kvfvJyr+Z+ZHvWxe4Ce4AgMwe/eC8TCeGOYrn7RywCCevgZA==}
+  '@tetherto/wdk-wallet-solana@1.0.0-beta.20':
+    resolution: {integrity: sha512-fIOS4IyOvzK2PwY82n6Q4+P/NLfoHoOQ4SwwkWmorA4Za/uj/PPLQlzV5Zxulp0su+BENDefHYRID4I4VtZiLA==}
+
+  '@tetherto/wdk-wallet-ton@1.0.0-beta.17':
+    resolution: {integrity: sha512-GffwcX125e4qe9mRwMwHR6DacFSyw4mCWRLhCHE47kwuWHMWgb1IDBLjIQs4Uuw/uY3T3toraRqV7+rd5Aap6g==}
 
   '@tetherto/wdk-wallet@1.0.0-beta.17':
     resolution: {integrity: sha512-xar2qggQJEcqtzlBvZDUzg0gtq3CwDtFzbCtFLqKTg2sjFEt8o2Grbl9r/BchEiulMhlYIX4drgLZ+Yf1rR9qw==}
+
+  '@tetherto/wdk-wallet@1.0.0-beta.19':
+    resolution: {integrity: sha512-/8PQUBNjcQJSbnQcsXdb5t3qTUhTuecZKGSE87OOfH2FVpvn7fnOlOmG89/sBFrJoMFnIsqe1A6QXdsAOUKUfA==}
+
+  '@tetherto/wdk-wallet@1.0.0-beta.21':
+    resolution: {integrity: sha512-4YESekkx7YYjzeHfdhg54LicvEEpT8PC0z4U5eH1/kpaaqqMGCaR250LjJ2EFV8UAxMPF6tbbk0fWhZGFkRvUw==}
+
+  '@tetherto/wdk-wallet@1.0.0-beta.25':
+    resolution: {integrity: sha512-j5ot5zzsOdFmR3AK0fWrOQKa8jyESm5ZT8rKRFN5VstmDRluHR6BR1+ZuaebxWPr/CNFANfky0rPZ2xoeX/Z3A==}
 
   '@ton/core@0.63.1':
     resolution: {integrity: sha512-hDWMjlKzc18W2E4OeV3hUP8ohRJNHPD4Wd1+AQJj8zshZyCRT0usrvnExgbNUTo/vntDqCGMzgYWbXxyaA+L4g==}
@@ -1167,12 +1269,6 @@ packages:
 
   '@ton/ton@16.2.4':
     resolution: {integrity: sha512-GWCNKizQm7MM99XNQGr+zWWdSfbFu/WLeQYm7tMIQDNKpAYEpLDKJUKuK/yrz763DBbnTDAFeq1NWAEy8rAOaQ==}
-    peerDependencies:
-      '@ton/core': '>=0.63.0 <1.0.0'
-      '@ton/crypto': '>=3.2.0'
-
-  '@ton/ton@16.3.0':
-    resolution: {integrity: sha512-iafYCLYVD2+ZrqbnJA7CvuZ13hUVQSmmOAxx8Ozo2pgl0HHjj004hdoHzrdE0XCHdj7AOZB3zcZaHBVJxQOh9Q==}
     peerDependencies:
       '@ton/core': '>=0.63.0 <1.0.0'
       '@ton/crypto': '>=3.2.0'
@@ -1216,8 +1312,14 @@ packages:
   '@types/node@25.9.1':
     resolution: {integrity: sha512-xfrlY7UD5rMJk3ZVJP8BNzS28J36YJg+xp+LPXV1TdWxr8uMH5A860QNxYDGQe/ylDSgjxE52Q9VnO7p75tJxg==}
 
+  '@types/set-cookie-parser@2.4.10':
+    resolution: {integrity: sha512-GGmQVGpQWUe5qglJozEjZV/5dyxbOOZ0LHe/lqyWssB88Y4svNfst0uqBVscdDeIKl5Jy5+aPSvy7mI9tYRguw==}
+
   '@types/stack-utils@2.0.3':
     resolution: {integrity: sha512-9aEbYZ3TbYMznPdcdr3SmIrLXwC/AKZXQeCf9Pgao5CKb8CyHuEX5jzWPTkvregvhRJHcpRO6BFoGW9ycaOkYw==}
+
+  '@types/statuses@2.0.6':
+    resolution: {integrity: sha512-xMAgYwceFhRA2zY+XbEA7mxYbA093wdiW8Vu6gZPGWy9cmOyU9XesH1tNcEWsKFd5Vzrqx5T3D38PWx1FIIXkA==}
 
   '@types/uuid@10.0.0':
     resolution: {integrity: sha512-7gqG38EyHgyP1S+7+xomFtL+ZNHcKv6DwNaCZmJmo1vgMugyF3TCnXVg4t1uk89mLNwnLtnY3TpOpCOyp1/xHQ==}
@@ -1818,6 +1920,9 @@ packages:
   bare-node-runtime@1.5.0:
     resolution: {integrity: sha512-eMRq9WDYd+E0IZ8EG/8iCozZJl511z6vp7kxZyxjDw77ggOZ7bThFpJ72Kztjs8sh0hoe+xhFyZmoqAdVE/Ziw==}
 
+  bare-node-runtime@1.5.2:
+    resolution: {integrity: sha512-SrHy9ToBzcfkki6uEJgYM63RMHs59efdu1640LwDDV2GLz44OVdlmTxCnqF8Zzdjf7LehrGw/aMrEcI6K5sWRw==}
+
   bare-os@3.9.1:
     resolution: {integrity: sha512-6M5XjcnsygQNPMCMPXSK379xrJFiZ/AEMNBmFEmQW8d/789VQATvriyi5r0HYTL9TkQ26rn3kgdTG3aisbrXkQ==}
     engines: {bare: '>=1.14.0'}
@@ -1929,6 +2034,10 @@ packages:
 
   bare-tls@3.1.5:
     resolution: {integrity: sha512-yoOtW3MyJF1mMwavLeuqOE7+qTKZ9cl1GRPxCUOXMUvYCfGltvXyRH48R4EKrRIfgUG6vil6n4Ea1i81fwmgZA==}
+    engines: {bare: '>=1.7.0'}
+
+  bare-tls@3.2.0:
+    resolution: {integrity: sha512-aPdeROdlokqfaPhrLCxsdURV2pvxOfsM7zkWBaTXwUWLZyFSTXZyIJTiPamcMLdF9L7NtUzZ/CWvT4yj7HAhUw==}
     engines: {bare: '>=1.7.0'}
 
   bare-tty@5.1.0:
@@ -2092,6 +2201,10 @@ packages:
   cjs-module-lexer@2.2.0:
     resolution: {integrity: sha512-4bHTS2YuzUvtoLjdy+98ykbNB5jS0+07EvFNXerqZQJ89F7DI6ET7OQo/HJuW6K0aVsKA9hj9/RVb2kQVOrPDQ==}
 
+  cli-width@4.1.0:
+    resolution: {integrity: sha512-ouuZd4/dm2Sw5Gmqy6bGyNNNe1qt9RpmxveLSO7KcgsTnU7RXfsw+/bukWGo1abgBiMAic068rclZsO4IWmmxQ==}
+    engines: {node: '>= 12'}
+
   cliui@8.0.1:
     resolution: {integrity: sha512-BSeNnyus75C4//NQ9gQt1/csTXyo/8Sb+afLAkzAptFuMsod9HFokGNudZpi/oQV73hnVK+sR+5PVRMd+Dr7YQ==}
     engines: {node: '>=12'}
@@ -2133,6 +2246,10 @@ packages:
 
   convert-source-map@2.0.0:
     resolution: {integrity: sha512-Kvp459HrV2FEJ1CAsi1Ku+MY3kasH19TFykTz2xWmMeq6bk2NU3XXvfJ+Q61m0xktWwt+1HSYf3JZsTms3aRJg==}
+
+  cookie@1.1.1:
+    resolution: {integrity: sha512-ei8Aos7ja0weRpFzJnEA9UHJ/7XQmqglbRwnf2ATjcB9Wq874VKH9kfjjirM6UhU2/E5fFYadylyhFldcqSidQ==}
+    engines: {node: '>=18'}
 
   cross-env@10.1.0:
     resolution: {integrity: sha512-GsYosgnACZTADcmEyJctkJIoqAhHjttw7RsFrVoJNXbsWWqaq6Ym+7kZjq6mS45O0jij6vtiReppKQEtqWy6Dw==}
@@ -2466,6 +2583,15 @@ packages:
   fast-stable-stringify@1.0.0:
     resolution: {integrity: sha512-wpYMUmFu5f00Sm0cj2pfivpmawLZ0NKdviQ4w9zJeR8JVtOpOxHmLaJuj0vxvGqMJQWyP/COUkF75/57OKyRag==}
 
+  fast-string-truncated-width@3.0.3:
+    resolution: {integrity: sha512-0jjjIEL6+0jag3l2XWWizO64/aZVtpiGE3t0Zgqxv0DPuxiMjvB3M24fCyhZUO4KomJQPj3LTSUnDP3GpdwC0g==}
+
+  fast-string-width@3.0.2:
+    resolution: {integrity: sha512-gX8LrtNEI5hq8DVUfRQMbr5lpaS4nMIWV+7XEbXk2b8kiQIizgnlr12B4dA3ZEx3308ze0O4Q1R+cHts8kyUJg==}
+
+  fast-wrap-ansi@0.2.2:
+    resolution: {integrity: sha512-7F2Fl+TjRSenLqlU3UjSH0iyqopqoZIu7eZVpEirP2g1GtWa2G/ecEmBdgz31+Mxr+ELclgg6sokpSFIQiZ02Q==}
+
   fastestsmallesttextencoderdecoder@1.0.22:
     resolution: {integrity: sha512-Pb8d48e+oIuY4MaM64Cd7OW1gt4nxCHs7/ddPPZ/Ic3sg8yVGM7O9wDvZ7us6ScaUupzM+pfBolwtYhN1IxBIw==}
 
@@ -2604,6 +2730,10 @@ packages:
   graphemer@1.4.0:
     resolution: {integrity: sha512-EtKwoO6kxCL9WO5xipiHTZlSzBm7WLT627TqC/uVRd0HKmq8NXyebnNYxDoBi7wt8eTWrUrKXCOVaFq9x1kgag==}
 
+  graphql@16.14.2:
+    resolution: {integrity: sha512-Chq1s4CY7jmh8gO2qvLIJyfCDIN+EHLFW/9iShnp1z8FjBQMoodWP1kDC36VAMXXIvAjj4ARa7ntfAV2BrjsbA==}
+    engines: {node: ^12.22.0 || ^14.16.0 || ^16.0.0 || >=17.0.0}
+
   has-bigints@1.1.0:
     resolution: {integrity: sha512-R3pbpkcIqv2Pm3dUwgjclDRVmWpTJW2DcMzcIhEXEx1oh/CEMObMm3KLmRJOdvhM7o4uQBnwr8pzRK2sJWIqfg==}
     engines: {node: '>= 0.4'}
@@ -2634,6 +2764,9 @@ packages:
   hasown@2.0.4:
     resolution: {integrity: sha512-T2UbfbBEF32wiepXIsMlTW9+dDYC6wMh/t/vYA4tuOMKqWz/n3vr1NFSxQiyP+zk2mXsoMA/i/7qV6LKut1t1A==}
     engines: {node: '>= 0.4'}
+
+  headers-polyfill@5.0.1:
+    resolution: {integrity: sha512-1TJ6Fih/b8h5TIcv+1+Hw0PDQWJTKDKzFZzcKOiW1wJza3XoAQlkCuXLbymPYB8+ZQyw8mHvdw560e8zVFIWyA==}
 
   html-escaper@2.0.2:
     resolution: {integrity: sha512-H2iMtd0I4Mt5eYiapRdIDjp+XzelXQ0tFE4JS7YFwFevXXMmOp9myNrUvCg0D6ws8iqkRPBfKHgbwig1SmlLfg==}
@@ -2746,6 +2879,9 @@ packages:
   is-negative-zero@2.0.3:
     resolution: {integrity: sha512-5KoIu2Ngpyek75jXodFvnafB6DJgr3u8uuK0LEZJjrU19DrMD3EVERaR8sjz8CCGgpZvxPl9SuE1GMVPFHx1mw==}
     engines: {node: '>= 0.4'}
+
+  is-node-process@1.2.0:
+    resolution: {integrity: sha512-Vg4o6/fqPxIjtxgUH5QLJhwZ7gW5diGCVlXpuUfELC62CuxM1iHcRe51f2W1FDy04Ai4KJkagKjx3XaqyfRKXw==}
 
   is-number-object@1.1.1:
     resolution: {integrity: sha512-lZhclumE1G6VYD8VHe35wFaIif+CTy5SJIi5+3y4psDgWu4wPDoBhF8NxUOinEc7pHgiTsT6MaBb92rKhhD+Xw==}
@@ -3115,6 +3251,20 @@ packages:
   ms@2.1.3:
     resolution: {integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==}
 
+  msw@2.15.0:
+    resolution: {integrity: sha512-2wQAmKkQKxRuXvYJxVhPGG0wZNBQyD06oJvxqw90XqLvptdqxdlHrFUfEteKkpaNORX3Xzc+HtEl/q0nfmN2wQ==}
+    engines: {node: '>=18'}
+    hasBin: true
+    peerDependencies:
+      typescript: '>= 4.8.x'
+    peerDependenciesMeta:
+      typescript:
+        optional: true
+
+  mute-stream@3.0.0:
+    resolution: {integrity: sha512-dkEJPVvun4FryqBmZ5KhDo0K9iDXAwn08tMLDinNdRBNPcYEDiWYysLcc6k3mjTMlbP9KyylvRpd4wFtwrT9rw==}
+    engines: {node: ^20.17.0 || >=22.9.0}
+
   napi-postinstall@0.3.4:
     resolution: {integrity: sha512-PHI5f1O0EP5xJ9gQmFGMS6IZcrVvTjpXjz7Na41gTE7eE2hK11lg04CECCYEEjdc17EV4DO+fkGEtt7TpTaTiQ==}
     engines: {node: ^12.20.0 || ^14.18.0 || >=16.0.0}
@@ -3198,6 +3348,9 @@ packages:
     resolution: {integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==}
     engines: {node: '>= 0.8.0'}
 
+  outvariant@1.4.3:
+    resolution: {integrity: sha512-+Sl2UErvtsoajRDKCE5/dBz4DIvHXQQnAxtQTF04OJxY0+DyZXSo5P5Bb7XYWOh81syohlYL24hbDwxedPUJCA==}
+
   own-keys@1.0.1:
     resolution: {integrity: sha512-qFOyK5PjiWZd+QQIh+1jhdb9LpxTF0qs7Pm8o5QHYZ0M3vKqSqzsZaEB6oWlxZ+q2sJBMI/Ktgd2N5ZwQoRHfg==}
     engines: {node: '>= 0.4'}
@@ -3267,6 +3420,9 @@ packages:
   path-scurry@1.11.1:
     resolution: {integrity: sha512-Xa4Nw17FS9ApQFJ9umLiJS4orGjm7ZzwUrwamcGQuHSzDyth9boKDaycYdDcZDuqYATXw4HFXgaqWTctW/v1HA==}
     engines: {node: '>=16 || 14 >=14.18'}
+
+  path-to-regexp@6.3.0:
+    resolution: {integrity: sha512-Yhpw4T9C6hPpgPeA28us07OJeqZ5EzQTkbfwuhsUg0c237RomFoETJgmp2sa3F/41gfLE6G5cqcYwznmeEeOlQ==}
 
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
@@ -3375,6 +3531,9 @@ packages:
     engines: {node: '>= 0.4'}
     hasBin: true
 
+  rettime@0.11.12:
+    resolution: {integrity: sha512-5ExtR1ppiDBQkVoPw5NAqdbfH4Iq2VOmQKHMtUoaFxA9bo2krzFYBtyq6K40xxbYp+2w/YOr6D+1ToF6tTN53A==}
+
   reusify@1.1.0:
     resolution: {integrity: sha512-g6QUff04oZpHs0eG5p83rFLhHeV00ug/Yf9nZM6fLeUrPguBTkTQOdpAWWspMh55TZfVQDPaN3NQJfbVRAxdIw==}
     engines: {iojs: '>=1.0.0', node: '>=0.10.0'}
@@ -3413,6 +3572,9 @@ packages:
     resolution: {integrity: sha512-rkVq3IXh+4FDGch+KwzX3aV9W3kO54GyEgpvBzSyctDA6Xtd7RJQV1xmXbeQp5v7+VzLOfVqiutSE6GICgPFvg==}
     engines: {node: '>=10'}
     hasBin: true
+
+  set-cookie-parser@3.2.1:
+    resolution: {integrity: sha512-Npd1Pt+4zb3BrSZDPd2qFwRpS6b1EUEasRrO8xS0zMJi0fApXXK5YuzP0minyJnxwnFHoVoJwA55q0A0cu63gQ==}
 
   set-function-length@1.2.2:
     resolution: {integrity: sha512-pgRc4hJ4/sNjWCSS9AmnS40x3bNMDTknHgL5UaMBTMyJnU90EgWh1Rz+MC9eFu4BuN/UwZjKQuY/1v3rM7HMfg==}
@@ -3496,6 +3658,10 @@ packages:
     engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
     hasBin: true
 
+  statuses@2.0.2:
+    resolution: {integrity: sha512-DvEy55V3DB7uknRo+4iOGT5fP1slR8wQohVdknigZPMpMstaKJQWhwiYBACJE3Ul2pTnATihhBYnRhZQHGBiRw==}
+    engines: {node: '>= 0.8'}
+
   stop-iteration-iterator@1.1.0:
     resolution: {integrity: sha512-eLoXW/DHyl62zxY4SCaIgnRhuMr6ri4juEYARS8E6sCEqzKpOiE521Ucofdx+KnDZl5xmvGYaaKCk5FEOxJCoQ==}
     engines: {node: '>= 0.4'}
@@ -3508,6 +3674,9 @@ packages:
 
   streamx@2.25.0:
     resolution: {integrity: sha512-0nQuG6jf1w+wddNEEXCF4nTg3LtufWINB5eFEN+5TNZW7KWJp6x87+JFL43vaAUPyCfH1wID+mNVyW6OHtFamg==}
+
+  strict-event-emitter@0.5.1:
+    resolution: {integrity: sha512-vMgjE/GGEPEFnhFub6pa4FmJBRBVOLpIII2hvCZ8Kzb7K0hlHo7mQv6xYrBvCL2LtAIBwFUK8wvuJgTVSQ5MFQ==}
 
   string-length@4.0.2:
     resolution: {integrity: sha512-+l6rNN5fYHNhZZy41RXsYptCjA2Igmq4EG7kZAYFQI1E1VTXarr6ZPXBg6eq7Y6eK4FEhY6AJlyuFIb/v/S0VQ==}
@@ -3584,6 +3753,10 @@ packages:
     resolution: {integrity: sha512-Bh7QjT8/SuKUIfObSXNHNSK6WHo6J1tHCqJsuaFDP7gP0fkzSfTxI8y85JrppZ0h8l0maIgc2tfuZQ6/t3GtnQ==}
     engines: {node: ^14.18.0 || >=16.0.0}
 
+  tagged-tag@1.0.0:
+    resolution: {integrity: sha512-yEFYrVhod+hdNyx7g5Bnkkb0G6si8HJurOoOEgC8B/O0uXLHlaey/65KRv6cuWBNhBgHKAROVpc7QyYqE5gFng==}
+    engines: {node: '>=20'}
+
   teex@1.0.1:
     resolution: {integrity: sha512-eYE6iEI62Ni1H8oIa7KlDU6uQBtqr4Eajni3wX7rpfXD8ysFx8z0+dri+KWEPWpBsxXfxu58x/0jvTVT1ekOSg==}
 
@@ -3600,8 +3773,19 @@ packages:
   text-table@0.2.0:
     resolution: {integrity: sha512-N+8UisAXDGk8PFXP4HAzVR9nbfmVJ3zYLAWiTIoqC5v5isinhr+r5uaO8+7r3BMfuNIufIsA7RdpVgacC2cSpw==}
 
+  tldts-core@7.4.19:
+    resolution: {integrity: sha512-goNXV6Ho9TIOfpJZanTd6CKG5DyYgYAL+k+22T0SLh8l6+KHIfBUPFuePuSZv05UttIaaLmI9tb7TmGIdK5AkQ==}
+
+  tldts@7.4.19:
+    resolution: {integrity: sha512-48dH6aSpQnpbzDUc4vIQZ1VjB8tkK+e8c1yx05/SZK+rkssgjEOlxDd/yU8/a4vGYQ9vRgJr9dwMq9TJ0b3X2Q==}
+    hasBin: true
+
   tmpl@1.0.5:
     resolution: {integrity: sha512-3f0uOEAQwIqGuWW2MVzYg8fV/QNnc/IpuJNG837rLuczAaLVHslWHZQj4IGiEl5Hs3kkbhwL9Ab7Hrsmuj+Smw==}
+
+  tough-cookie@6.0.2:
+    resolution: {integrity: sha512-exgYmnmL/sJpR3upZfXG5PoatXQii55xAiXGXzY+sROLZ/Y+SLcp9PgJNI9Vz37HpQ74WvDcLT8eqm+kV3FzrA==}
+    engines: {node: '>=16'}
 
   tr46@0.0.3:
     resolution: {integrity: sha512-N3WMsuqV66lT30CrXNbEjx4GEwlow3v6rr4mCcv6prnfwhS01rkgyFdjPNBYd9br7LpXV1+Emh01fHnq2Gdgrw==}
@@ -3637,6 +3821,10 @@ packages:
   type-fest@0.3.1:
     resolution: {integrity: sha512-cUGJnCdr4STbePCgqNFbpVNCepa+kAVohJs1sLhxzdH+gnEoOd8VhbYa7pD3zZYGiURWM2xzEII3fQcRizDkYQ==}
     engines: {node: '>=6'}
+
+  type-fest@5.10.0:
+    resolution: {integrity: sha512-NoSdpq/WEiAg5sjmBkmV/hfxv6HJH4NqPNrqjtSO5CwRmpsDfaf4begxW34KdJykH/l1yHtwBWQkCRdoXO8mPA==}
+    engines: {node: '>=20'}
 
   typed-array-buffer@1.0.3:
     resolution: {integrity: sha512-nAYYwfY3qnzX30IkA6AQZjVbtK6duGontcQm1WSG1MD94YLqK0515GNApXkoxKOWMusVssAHWLh9SeaoefYFGw==}
@@ -3683,6 +3871,9 @@ packages:
 
   unrs-resolver@1.12.2:
     resolution: {integrity: sha512-dmlRxBJJayXjqTwC+JtF1HhJmgf3ftQ3YejFcZrf4+KKtJv0qDsK1pjqaaVjG7wJ5NJ6UVP1OqRMQ71Z4C3rxQ==}
+
+  until-async@3.0.2:
+    resolution: {integrity: sha512-IiSk4HlzAMqTUseHHe3VhIGyuFmN90zMTpD3Z3y8jeQbzLIq500MVM7Jq2vUAnTKAFPJrqwkzr6PoTcPhGcOiw==}
 
   update-browserslist-db@1.2.3:
     resolution: {integrity: sha512-Js0m9cx+qOgDxo0eMiFGEueWztz+d4+M3rGlmKPT+T4IS/jP4ylw3Nwpu6cpTTP8R1MAC1kF4VbdLt3ARf209w==}
@@ -4194,6 +4385,33 @@ snapshots:
 
   '@humanwhocodes/object-schema@2.0.3': {}
 
+  '@inquirer/ansi@2.0.10': {}
+
+  '@inquirer/confirm@6.3.5(@types/node@25.9.1)':
+    dependencies:
+      '@inquirer/core': 12.0.6(@types/node@25.9.1)
+      '@inquirer/type': 4.2.1(@types/node@25.9.1)
+    optionalDependencies:
+      '@types/node': 25.9.1
+
+  '@inquirer/core@12.0.6(@types/node@25.9.1)':
+    dependencies:
+      '@inquirer/ansi': 2.0.10
+      '@inquirer/figures': 2.0.10
+      '@inquirer/type': 4.2.1(@types/node@25.9.1)
+      cli-width: 4.1.0
+      fast-wrap-ansi: 0.2.2
+      mute-stream: 3.0.0
+      signal-exit: 4.1.0
+    optionalDependencies:
+      '@types/node': 25.9.1
+
+  '@inquirer/figures@2.0.10': {}
+
+  '@inquirer/type@4.2.1(@types/node@25.9.1)':
+    optionalDependencies:
+      '@types/node': 25.9.1
+
   '@isaacs/cliui@8.0.2':
     dependencies:
       string-width: 5.1.2
@@ -4412,6 +4630,15 @@ snapshots:
 
   '@mempool/electrum-client@1.1.9': {}
 
+  '@mswjs/interceptors@0.41.9':
+    dependencies:
+      '@open-draft/deferred-promise': 2.2.0
+      '@open-draft/logger': 0.3.0
+      '@open-draft/until': 2.1.0
+      is-node-process: 1.2.0
+      outvariant: 1.4.3
+      strict-event-emitter: 0.5.1
+
   '@napi-rs/wasm-runtime@1.1.4(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)':
     dependencies:
       '@emnapi/core': 1.10.0
@@ -4459,6 +4686,17 @@ snapshots:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
 
+  '@open-draft/deferred-promise@2.2.0': {}
+
+  '@open-draft/deferred-promise@3.0.0': {}
+
+  '@open-draft/logger@0.3.0':
+    dependencies:
+      is-node-process: 1.2.0
+      outvariant: 1.4.3
+
+  '@open-draft/until@2.1.0': {}
+
   '@pkgjs/parseargs@0.11.0':
     optional: true
 
@@ -4478,11 +4716,15 @@ snapshots:
     dependencies:
       '@sinonjs/commons': 3.0.1
 
-  '@solana-program/system@0.9.0(@solana/kit@4.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)(ws@8.21.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)))':
+  '@solana-program/memo@0.9.0(@solana/kit@4.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2))':
     dependencies:
       '@solana/kit': 4.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)(ws@8.21.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))
 
-  '@solana-program/token@0.7.0(@solana/kit@4.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)(ws@8.21.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)))':
+  '@solana-program/system@0.9.0(@solana/kit@4.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2))':
+    dependencies:
+      '@solana/kit': 4.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)(ws@8.21.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))
+
+  '@solana-program/token@0.7.0(@solana/kit@4.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2))':
     dependencies:
       '@solana/kit': 4.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)(ws@8.21.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))
 
@@ -5123,7 +5365,7 @@ snapshots:
 
   '@tetherto/wdk-failover-provider@1.0.0-beta.2': {}
 
-  '@tetherto/wdk-wallet-btc@1.0.0-beta.14(@noble/curves@2.3.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))(bare-url@2.4.3)(typescript@7.0.2)':
+  '@tetherto/wdk-wallet-btc@1.0.0-beta.17(@noble/curves@2.3.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))(bare-url@2.4.3)(typescript@7.0.2)':
     dependencies:
       '@bitcoinerlab/btcmessage': 4.0.1
       '@bitcoinerlab/coinselect': 2.0.1(@noble/curves@2.3.0)(@noble/hashes@1.8.0)(typescript@7.0.2)
@@ -5139,7 +5381,7 @@ snapshots:
       bitcoinjs-lib: 7.0.1(typescript@7.0.2)
       lru-cache: 11.5.1
       p-limit: 7.3.0
-      sodium-universal: 5.0.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-url@2.4.3)
+      sodium-universal: 5.0.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))(bare-url@2.4.3)
       uint8array-tools: 0.0.9
     transitivePeerDependencies:
       - '@ledgerhq/ledger-bitcoin'
@@ -5156,46 +5398,13 @@ snapshots:
       - sodium-javascript
       - typescript
 
-  '@tetherto/wdk-wallet-btc@1.0.0-beta.14(bare-url@2.4.3)(typescript@7.0.2)':
-    dependencies:
-      '@bitcoinerlab/btcmessage': 4.0.1
-      '@bitcoinerlab/coinselect': 2.0.1(@noble/curves@2.3.0)(@noble/hashes@1.8.0)(typescript@7.0.2)
-      '@bitcoinerlab/descriptors': 3.1.7(@noble/curves@2.3.0)(@noble/hashes@1.8.0)(typescript@7.0.2)
-      '@bitcoinerlab/secp256k1': 1.2.0
-      '@mempool/electrum-client': 1.1.9
-      '@noble/hashes': 1.8.0
-      '@tetherto/wdk-failover-provider': 1.0.0-beta.2
-      '@tetherto/wdk-wallet': 1.0.0-beta.17(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
-      bare-node-runtime: 1.5.0(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
-      bip32: 5.0.1(typescript@7.0.2)
-      bip39: 3.1.0
-      bitcoinjs-lib: 7.0.1(typescript@7.0.2)
-      lru-cache: 11.5.1
-      p-limit: 7.3.0
-      sodium-universal: 5.0.1(bare-url@2.4.3)
-      uint8array-tools: 0.0.9
-    transitivePeerDependencies:
-      - '@ledgerhq/ledger-bitcoin'
-      - '@noble/curves'
-      - '@scure/base'
-      - '@scure/bip32'
-      - '@scure/btc-signer'
-      - bare-abort-controller
-      - bare-buffer
-      - bare-events
-      - bare-tcp
-      - bare-url
-      - react-native-b4a
-      - sodium-javascript
-      - typescript
-
-  '@tetherto/wdk-wallet-evm-erc-4337@1.0.0-beta.16(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))(bare-url@2.4.3)(bufferutil@4.1.0)(utf-8-validate@6.0.6)':
+  '@tetherto/wdk-wallet-evm-erc-4337@1.0.0-beta.23(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))(bare-url@2.4.3)(bufferutil@4.1.0)(utf-8-validate@6.0.6)':
     dependencies:
       '@tetherto/wdk-failover-provider': 1.0.0-beta.2
       '@tetherto/wdk-wallet': 1.0.0-beta.17(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
-      '@tetherto/wdk-wallet-evm': 1.0.0-beta.17(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))(bare-url@2.4.3)(bufferutil@4.1.0)(utf-8-validate@6.0.6)
+      '@tetherto/wdk-wallet-evm': 1.0.0-beta.19(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))(bare-url@2.4.3)(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       abstractionkit: 0.4.0
-      bare-node-runtime: 1.5.0(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
+      bare-node-runtime: 1.5.2(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
       ethers: 6.17.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
     transitivePeerDependencies:
       - bare-abort-controller
@@ -5208,13 +5417,13 @@ snapshots:
       - sodium-javascript
       - utf-8-validate
 
-  '@tetherto/wdk-wallet-evm@1.0.0-beta.17(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))(bare-url@2.4.3)(bufferutil@4.1.0)(utf-8-validate@6.0.6)':
+  '@tetherto/wdk-wallet-evm@1.0.0-beta.19(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))(bare-url@2.4.3)(bufferutil@4.1.0)(utf-8-validate@6.0.6)':
     dependencies:
       '@noble/hashes': 1.8.0
       '@noble/secp256k1': 2.2.3
       '@tetherto/wdk-failover-provider': 1.0.0-beta.2
       '@tetherto/wdk-wallet': 1.0.0-beta.17(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
-      bare-node-runtime: 1.5.0(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
+      bare-node-runtime: 1.5.2(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
       bip39: 3.1.0
       ethers: 6.17.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       sodium-universal: 5.0.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))(bare-url@2.4.3)
@@ -5229,16 +5438,16 @@ snapshots:
       - sodium-javascript
       - utf-8-validate
 
-  '@tetherto/wdk-wallet-evm@1.0.0-beta.17(bare-url@2.4.3)(bufferutil@4.1.0)(utf-8-validate@6.0.6)':
+  '@tetherto/wdk-wallet-evm@1.0.0-beta.24(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))(bare-url@2.4.3)(bufferutil@4.1.0)(utf-8-validate@6.0.6)':
     dependencies:
       '@noble/hashes': 1.8.0
       '@noble/secp256k1': 2.2.3
       '@tetherto/wdk-failover-provider': 1.0.0-beta.2
-      '@tetherto/wdk-wallet': 1.0.0-beta.17(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
-      bare-node-runtime: 1.5.0(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
+      '@tetherto/wdk-wallet': 1.0.0-beta.21(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
+      bare-node-runtime: 1.5.2(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
       bip39: 3.1.0
       ethers: 6.17.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
-      sodium-universal: 5.0.1(bare-url@2.4.3)
+      sodium-universal: 5.0.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))(bare-url@2.4.3)
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-buffer
@@ -5250,14 +5459,16 @@ snapshots:
       - sodium-javascript
       - utf-8-validate
 
-  '@tetherto/wdk-wallet-solana@1.0.0-beta.13(@solana/kit@4.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)(ws@8.21.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))(bare-url@2.4.3)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)':
+  '@tetherto/wdk-wallet-solana@1.0.0-beta.20(@solana/kit@4.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)(ws@8.21.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))(bare-url@2.4.3)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)':
     dependencies:
       '@noble/ed25519': 3.1.0
       '@noble/hashes': 2.2.0
-      '@solana-program/system': 0.9.0(@solana/kit@4.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)(ws@8.21.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)))
-      '@solana-program/token': 0.7.0(@solana/kit@4.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)(ws@8.21.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)))
+      '@solana-program/memo': 0.9.0(@solana/kit@4.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2))
+      '@solana-program/system': 0.9.0(@solana/kit@4.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2))
+      '@solana-program/token': 0.7.0(@solana/kit@4.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2))
       '@solana/addresses': 3.0.3(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)
       '@solana/codecs': 3.0.3(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)
+      '@solana/errors': 3.0.3(typescript@7.0.2)
       '@solana/functional': 3.0.3(typescript@7.0.2)
       '@solana/keys': 3.0.3(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)
       '@solana/rpc': 3.0.3(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)
@@ -5265,11 +5476,11 @@ snapshots:
       '@solana/transaction-messages': 3.0.3(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)
       '@solana/transactions': 3.0.3(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)
       '@tetherto/wdk-failover-provider': 1.0.0-beta.2
-      '@tetherto/wdk-wallet': 1.0.0-beta.17(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
-      bare-node-runtime: 1.5.0(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
+      '@tetherto/wdk-wallet': 1.0.0-beta.19(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
+      bare-node-runtime: 1.5.2(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
       bip39: 3.1.0
       micro-key-producer: 0.7.6
-      sodium-universal: 5.0.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-url@2.4.3)
+      sodium-universal: 5.0.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))(bare-url@2.4.3)
     transitivePeerDependencies:
       - '@solana/kit'
       - bare-abort-controller
@@ -5282,71 +5493,16 @@ snapshots:
       - sodium-javascript
       - typescript
 
-  '@tetherto/wdk-wallet-solana@1.0.0-beta.13(@solana/kit@4.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)(ws@8.21.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(bare-url@2.4.3)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)':
-    dependencies:
-      '@noble/ed25519': 3.1.0
-      '@noble/hashes': 2.2.0
-      '@solana-program/system': 0.9.0(@solana/kit@4.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)(ws@8.21.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)))
-      '@solana-program/token': 0.7.0(@solana/kit@4.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)(ws@8.21.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)))
-      '@solana/addresses': 3.0.3(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)
-      '@solana/codecs': 3.0.3(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)
-      '@solana/functional': 3.0.3(typescript@7.0.2)
-      '@solana/keys': 3.0.3(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)
-      '@solana/rpc': 3.0.3(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)
-      '@solana/signers': 3.0.3(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)
-      '@solana/transaction-messages': 3.0.3(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)
-      '@solana/transactions': 3.0.3(fastestsmallesttextencoderdecoder@1.0.22)(typescript@7.0.2)
-      '@tetherto/wdk-failover-provider': 1.0.0-beta.2
-      '@tetherto/wdk-wallet': 1.0.0-beta.17(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
-      bare-node-runtime: 1.5.0(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
-      bip39: 3.1.0
-      micro-key-producer: 0.7.6
-      sodium-universal: 5.0.1(bare-url@2.4.3)
-    transitivePeerDependencies:
-      - '@solana/kit'
-      - bare-abort-controller
-      - bare-buffer
-      - bare-events
-      - bare-tcp
-      - bare-url
-      - fastestsmallesttextencoderdecoder
-      - react-native-b4a
-      - sodium-javascript
-      - typescript
-
-  '@tetherto/wdk-wallet-ton@1.0.0-beta.13(@ton/core@0.63.1(@ton/crypto@3.3.0))(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))(bare-url@2.4.3)':
+  '@tetherto/wdk-wallet-ton@1.0.0-beta.17(@ton/core@0.63.1(@ton/crypto@3.3.0))(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))(bare-url@2.4.3)':
     dependencies:
       '@tetherto/wdk-failover-provider': 1.0.0-beta.2
       '@tetherto/wdk-wallet': 1.0.0-beta.17(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
       '@ton/crypto': 3.3.0
       '@ton/ton': 16.2.4(@ton/core@0.63.1(@ton/crypto@3.3.0))(@ton/crypto@3.3.0)
-      bare-node-runtime: 1.5.0(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
+      bare-node-runtime: 1.5.2(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
       bip39: 3.1.0
       micro-key-producer: 0.7.6
-      sodium-universal: 5.0.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-url@2.4.3)
-      tweetnacl: 1.0.3
-    transitivePeerDependencies:
-      - '@ton/core'
-      - bare-abort-controller
-      - bare-buffer
-      - bare-events
-      - bare-tcp
-      - bare-url
-      - debug
-      - react-native-b4a
-      - sodium-javascript
-      - supports-color
-
-  '@tetherto/wdk-wallet-ton@1.0.0-beta.13(@ton/core@0.63.1(@ton/crypto@3.3.0))(bare-url@2.4.3)':
-    dependencies:
-      '@tetherto/wdk-failover-provider': 1.0.0-beta.2
-      '@tetherto/wdk-wallet': 1.0.0-beta.17(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
-      '@ton/crypto': 3.3.0
-      '@ton/ton': 16.2.4(@ton/core@0.63.1(@ton/crypto@3.3.0))(@ton/crypto@3.3.0)
-      bare-node-runtime: 1.5.0(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
-      bip39: 3.1.0
-      micro-key-producer: 0.7.6
-      sodium-universal: 5.0.1(bare-url@2.4.3)
+      sodium-universal: 5.0.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))(bare-url@2.4.3)
       tweetnacl: 1.0.3
     transitivePeerDependencies:
       - '@ton/core'
@@ -5368,6 +5524,30 @@ snapshots:
       - bare-tcp
       - react-native-b4a
 
+  '@tetherto/wdk-wallet@1.0.0-beta.19(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))':
+    dependencies:
+      bare-node-runtime: 1.5.2(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
+      bip39: 3.1.0
+    transitivePeerDependencies:
+      - bare-tcp
+      - react-native-b4a
+
+  '@tetherto/wdk-wallet@1.0.0-beta.21(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))':
+    dependencies:
+      bare-node-runtime: 1.5.2(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
+      bip39: 3.1.0
+    transitivePeerDependencies:
+      - bare-tcp
+      - react-native-b4a
+
+  '@tetherto/wdk-wallet@1.0.0-beta.25(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))':
+    dependencies:
+      bare-node-runtime: 1.5.2(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
+      bip39: 3.1.0
+    transitivePeerDependencies:
+      - bare-tcp
+      - react-native-b4a
+
   '@ton/core@0.63.1(@ton/crypto@3.3.0)':
     dependencies:
       '@ton/crypto': 3.3.0
@@ -5383,17 +5563,6 @@ snapshots:
       tweetnacl: 1.0.3
 
   '@ton/ton@16.2.4(@ton/core@0.63.1(@ton/crypto@3.3.0))(@ton/crypto@3.3.0)':
-    dependencies:
-      '@ton/core': 0.63.1(@ton/crypto@3.3.0)
-      '@ton/crypto': 3.3.0
-      axios: 1.18.0
-      dataloader: 2.2.3
-      zod: 3.25.76
-    transitivePeerDependencies:
-      - debug
-      - supports-color
-
-  '@ton/ton@16.3.0(@ton/core@0.63.1(@ton/crypto@3.3.0))(@ton/crypto@3.3.0)':
     dependencies:
       '@ton/core': 0.63.1(@ton/crypto@3.3.0)
       '@ton/crypto': 3.3.0
@@ -5456,7 +5625,13 @@ snapshots:
     dependencies:
       undici-types: 7.24.6
 
+  '@types/set-cookie-parser@2.4.10':
+    dependencies:
+      '@types/node': 25.9.1
+
   '@types/stack-utils@2.0.3': {}
+
+  '@types/statuses@2.0.6': {}
 
   '@types/uuid@10.0.0': {}
 
@@ -5817,14 +5992,6 @@ snapshots:
     optionalDependencies:
       bare-url: 2.4.3
 
-  bare-ansi-escapes@2.2.3:
-    dependencies:
-      bare-stream: 2.13.1
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-events
-      - react-native-b4a
-
   bare-ansi-escapes@2.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2)):
     dependencies:
       bare-stream: 2.13.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))
@@ -5832,15 +5999,6 @@ snapshots:
       bare-buffer: 3.6.0
     transitivePeerDependencies:
       - bare-abort-controller
-      - bare-events
-      - react-native-b4a
-
-  bare-assert@1.2.0:
-    dependencies:
-      bare-inspect: 3.1.4
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
       - bare-events
       - react-native-b4a
 
@@ -5999,16 +6157,6 @@ snapshots:
       - bare-url
       - react-native-b4a
 
-  bare-inspect@3.1.4:
-    dependencies:
-      bare-ansi-escapes: 2.2.3
-      bare-type: 1.1.0
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - bare-events
-      - react-native-b4a
-
   bare-inspect@3.1.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2)):
     dependencies:
       bare-ansi-escapes: 2.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))
@@ -6133,6 +6281,51 @@ snapshots:
       - bare-tcp
       - react-native-b4a
 
+  bare-node-runtime@1.5.2(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)):
+    dependencies:
+      bare-abort-controller: 1.1.2
+      bare-assert: 1.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))
+      bare-async-hooks: 0.0.0
+      bare-buffer: 3.6.0
+      bare-console: 6.1.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))
+      bare-crypto: 1.13.7(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))
+      bare-dgram: 1.0.1(bare-abort-controller@1.1.2)(bare-url@2.4.3)
+      bare-diagnostics-channel: 1.1.0
+      bare-dns: 2.1.4
+      bare-events: 2.8.3(bare-abort-controller@1.1.2)
+      bare-fetch: 3.0.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))
+      bare-fs: 4.7.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)
+      bare-http1: 4.5.6(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-url@2.4.3)
+      bare-https: 3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))(bare-url@2.4.3)
+      bare-inspector: 6.0.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
+      bare-module: 6.2.0(bare-buffer@3.6.0)
+      bare-net: 2.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)
+      bare-os: 3.9.1
+      bare-path: 3.0.0
+      bare-performance: 2.0.0
+      bare-process: 4.4.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)
+      bare-punycode: 0.0.0
+      bare-querystring: 1.1.0
+      bare-readline: 1.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))
+      bare-repl: 6.0.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))
+      bare-sqlite: 0.1.4(bare-buffer@3.6.0)
+      bare-stream: 2.13.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))
+      bare-string-decoder: 1.0.0(bare-buffer@3.6.0)
+      bare-subprocess: 6.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)
+      bare-timers: 3.2.1(bare-abort-controller@1.1.2)
+      bare-tls: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))
+      bare-tty: 5.1.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)
+      bare-url: 2.4.3
+      bare-utils: 1.6.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))
+      bare-v8: 1.0.1
+      bare-vm: 1.0.1
+      bare-worker: 4.1.6(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)
+      bare-ws: 3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-url@2.4.3)
+      bare-zlib: 1.3.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))
+    transitivePeerDependencies:
+      - bare-tcp
+      - react-native-b4a
+
   bare-os@3.9.1: {}
 
   bare-path@3.0.0:
@@ -6221,13 +6414,6 @@ snapshots:
       - bare-buffer
       - react-native-b4a
 
-  bare-stream@2.13.1:
-    dependencies:
-      streamx: 2.25.0(bare-abort-controller@1.1.2)
-      teex: 1.0.1(bare-abort-controller@1.1.2)
-    transitivePeerDependencies:
-      - react-native-b4a
-
   bare-stream@2.13.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2)):
     dependencies:
       streamx: 2.25.0(bare-abort-controller@1.1.2)
@@ -6312,6 +6498,16 @@ snapshots:
       bare-abort-controller: 1.1.2
 
   bare-tls@3.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2)):
+    dependencies:
+      bare-net: 2.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)
+      bare-stream: 2.13.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - bare-events
+      - react-native-b4a
+
+  bare-tls@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2)):
     dependencies:
       bare-net: 2.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)
       bare-stream: 2.13.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))
@@ -6532,6 +6728,8 @@ snapshots:
 
   cjs-module-lexer@2.2.0: {}
 
+  cli-width@4.1.0: {}
+
   cliui@8.0.1:
     dependencies:
       string-width: 4.2.3
@@ -6567,6 +6765,8 @@ snapshots:
   concat-map@0.0.1: {}
 
   convert-source-map@2.0.0: {}
+
+  cookie@1.1.1: {}
 
   cross-env@10.1.0:
     dependencies:
@@ -7019,6 +7219,16 @@ snapshots:
 
   fast-stable-stringify@1.0.0: {}
 
+  fast-string-truncated-width@3.0.3: {}
+
+  fast-string-width@3.0.2:
+    dependencies:
+      fast-string-truncated-width: 3.0.3
+
+  fast-wrap-ansi@0.2.2:
+    dependencies:
+      fast-string-width: 3.0.2
+
   fastestsmallesttextencoderdecoder@1.0.22: {}
 
   fastq@1.20.1:
@@ -7165,6 +7375,8 @@ snapshots:
 
   graphemer@1.4.0: {}
 
+  graphql@16.14.2: {}
+
   has-bigints@1.1.0: {}
 
   has-flag@4.0.0: {}
@@ -7190,6 +7402,11 @@ snapshots:
   hasown@2.0.4:
     dependencies:
       function-bind: 1.1.2
+
+  headers-polyfill@5.0.1:
+    dependencies:
+      '@types/set-cookie-parser': 2.4.10
+      set-cookie-parser: 3.2.1
 
   html-escaper@2.0.2: {}
 
@@ -7302,6 +7519,8 @@ snapshots:
   is-map@2.0.3: {}
 
   is-negative-zero@2.0.3: {}
+
+  is-node-process@1.2.0: {}
 
   is-number-object@1.1.1:
     dependencies:
@@ -7870,6 +8089,33 @@ snapshots:
 
   ms@2.1.3: {}
 
+  msw@2.15.0(@types/node@25.9.1)(typescript@7.0.2):
+    dependencies:
+      '@inquirer/confirm': 6.3.5(@types/node@25.9.1)
+      '@mswjs/interceptors': 0.41.9
+      '@open-draft/deferred-promise': 3.0.0
+      '@types/statuses': 2.0.6
+      cookie: 1.1.1
+      graphql: 16.14.2
+      headers-polyfill: 5.0.1
+      is-node-process: 1.2.0
+      outvariant: 1.4.3
+      path-to-regexp: 6.3.0
+      picocolors: 1.1.1
+      rettime: 0.11.12
+      statuses: 2.0.2
+      strict-event-emitter: 0.5.1
+      tough-cookie: 6.0.2
+      type-fest: 5.10.0
+      until-async: 3.0.2
+      yargs: 17.7.2
+    optionalDependencies:
+      typescript: 7.0.2
+    transitivePeerDependencies:
+      - '@types/node'
+
+  mute-stream@3.0.0: {}
+
   napi-postinstall@0.3.4: {}
 
   natural-compare@1.4.0: {}
@@ -7957,6 +8203,8 @@ snapshots:
       type-check: 0.4.0
       word-wrap: 1.2.5
 
+  outvariant@1.4.3: {}
+
   own-keys@1.0.1:
     dependencies:
       get-intrinsic: 1.3.0
@@ -8021,6 +8269,8 @@ snapshots:
     dependencies:
       lru-cache: 10.4.3
       minipass: 7.1.3
+
+  path-to-regexp@6.3.0: {}
 
   picocolors@1.1.1: {}
 
@@ -8126,6 +8376,8 @@ snapshots:
       path-parse: 1.0.7
       supports-preserve-symlinks-flag: 1.0.0
 
+  rettime@0.11.12: {}
+
   reusify@1.1.0: {}
 
   rimraf@3.0.2:
@@ -8173,6 +8425,8 @@ snapshots:
   semver@6.3.1: {}
 
   semver@7.8.1: {}
+
+  set-cookie-parser@3.2.1: {}
 
   set-function-length@1.2.2:
     dependencies:
@@ -8248,53 +8502,9 @@ snapshots:
       - bare-url
       - react-native-b4a
 
-  sodium-native@5.1.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-url@2.4.3):
-    dependencies:
-      bare-assert: 1.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))
-      require-addon: 1.2.0(bare-url@2.4.3)
-      which-runtime: 1.4.0
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - bare-events
-      - bare-url
-      - react-native-b4a
-
-  sodium-native@5.1.0(bare-url@2.4.3):
-    dependencies:
-      bare-assert: 1.2.0
-      require-addon: 1.2.0(bare-url@2.4.3)
-      which-runtime: 1.4.0
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - bare-events
-      - bare-url
-      - react-native-b4a
-
   sodium-universal@5.0.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))(bare-url@2.4.3):
     dependencies:
       sodium-native: 5.1.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))(bare-url@2.4.3)
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - bare-events
-      - bare-url
-      - react-native-b4a
-
-  sodium-universal@5.0.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-url@2.4.3):
-    dependencies:
-      sodium-native: 5.1.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-url@2.4.3)
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - bare-events
-      - bare-url
-      - react-native-b4a
-
-  sodium-universal@5.0.1(bare-url@2.4.3):
-    dependencies:
-      sodium-native: 5.1.0(bare-url@2.4.3)
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-buffer
@@ -8339,6 +8549,8 @@ snapshots:
       - eslint-import-resolver-webpack
       - supports-color
 
+  statuses@2.0.2: {}
+
   stop-iteration-iterator@1.1.0:
     dependencies:
       es-errors: 1.3.0
@@ -8358,6 +8570,8 @@ snapshots:
     transitivePeerDependencies:
       - bare-abort-controller
       - react-native-b4a
+
+  strict-event-emitter@0.5.1: {}
 
   string-length@4.0.2:
     dependencies:
@@ -8452,6 +8666,8 @@ snapshots:
     dependencies:
       '@pkgr/core': 0.2.9
 
+  tagged-tag@1.0.0: {}
+
   teex@1.0.1(bare-abort-controller@1.1.2):
     dependencies:
       streamx: 2.25.0(bare-abort-controller@1.1.2)
@@ -8475,7 +8691,17 @@ snapshots:
 
   text-table@0.2.0: {}
 
+  tldts-core@7.4.19: {}
+
+  tldts@7.4.19:
+    dependencies:
+      tldts-core: 7.4.19
+
   tmpl@1.0.5: {}
+
+  tough-cookie@6.0.2:
+    dependencies:
+      tldts: 7.4.19
 
   tr46@0.0.3: {}
 
@@ -8503,6 +8729,10 @@ snapshots:
   type-fest@0.21.3: {}
 
   type-fest@0.3.1: {}
+
+  type-fest@5.10.0:
+    dependencies:
+      tagged-tag: 1.0.0
 
   typed-array-buffer@1.0.3:
     dependencies:
@@ -8612,6 +8842,8 @@ snapshots:
       '@unrs/resolver-binding-win32-arm64-msvc': 1.12.2
       '@unrs/resolver-binding-win32-ia32-msvc': 1.12.2
       '@unrs/resolver-binding-win32-x64-msvc': 1.12.2
+
+  until-async@3.0.2: {}
 
   update-browserslist-db@1.2.3(browserslist@4.28.2):
     dependencies:

@@ -32,12 +32,21 @@ export async function buildAccount (cfg) {
 
   const bip = Number(process.env.LAYERSWAP_BTC_BIP ?? 84)
 
-  // The wallet's `client` config accepts blockbook-http or electrum descriptors. The
-  // simplest CLI path is blockbook-http: point LAYERSWAP_SOURCE_RPC at a Blockbook URL
-  // (e.g. https://btc.example.com/api).
+  // The wallet's `client` config accepts blockbook-http or electrum descriptors. Point
+  // LAYERSWAP_SOURCE_RPC at a Blockbook URL (e.g. https://btc.example.com/api), or at an
+  // Electrum server as tcp://, ssl:// or tls://host:port (e.g. ssl://electrum.blockstream.info:50002).
   return new WalletAccountBtc(cfg.seed, cfg.derivationPath, {
     network,
     bip,
-    client: { type: 'blockbook-http', clientConfig: { url: cfg.sourceRpc } }
+    client: buildClient(cfg.sourceRpc)
   })
+}
+
+function buildClient (url) {
+  const electrum = /^(tcp|ssl|tls):\/\/([^:/]+):(\d+)\/?$/.exec(url)
+  if (electrum) {
+    const [, protocol, host, port] = electrum
+    return { type: 'electrum', clientConfig: { protocol, host, port: Number(port) } }
+  }
+  return { type: 'blockbook-http', clientConfig: { url } }
 }

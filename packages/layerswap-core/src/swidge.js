@@ -14,6 +14,9 @@
 
 'use strict'
 
+import { ProviderErrorReason } from '@tetherto/wdk-wallet'
+import { MaximumFeeExceededError, NoSuchElementError, ProviderError, SwidgeError, SwidgeErrorReason, ValueError } from '@tetherto/wdk-wallet/protocols'
+
 import { parseDecimal } from './networks.js'
 
 /** @typedef {import('./layerswap-api-client.js').LayerswapNetwork} LayerswapNetwork */
@@ -21,12 +24,13 @@ import { parseDecimal } from './networks.js'
 /** @typedef {import('./layerswap-api-client.js').LayerswapQuote} LayerswapQuote */
 /** @typedef {import('./layerswap-api-client.js').LayerswapSwapResponse} LayerswapSwapResponse */
 /** @typedef {import('./layerswap-api-client.js').LayerswapSwapTransaction} LayerswapSwapTransaction */
+/** @typedef {import('./layerswap-api-client.js').LayerswapSwap} LayerswapSwap */
 
 // The shapes returned by these helpers structurally match the swidge typedefs in
 // `@tetherto/wdk-wallet/protocols` (SwidgeStatus, SwidgeFee, SwidgeTransaction,
 // SwidgeQuote, SwidgeStatusResult, SwidgeSupportedChain, SwidgeSupportedToken).
-// They are declared locally so this package stays free of any WDK dependency —
-// the chain-specific sibling packages are the ones bound to the WDK contract.
+// Errors are the WDK error classes, so every VM package honours the throw contract
+// of the `ISwidgeProtocol` interface.
 
 /**
  * @typedef {'pending' | 'action-required' | 'completed' | 'failed'
@@ -63,6 +67,37 @@ import { parseDecimal } from './networks.js'
  * @typedef {Object} LayerswapSwidgeStatusResult
  * @property {LayerswapSwidgeStatus} status
  * @property {LayerswapSwidgeTransaction[]} [transactions]
+ */
+
+/**
+ * @typedef {Object} LayerswapSwidgeStatusOptions
+ * @property {string | number} [fromChain] - The source chain: Layerswap network name or chain id.
+ * @property {string | number} [toChain] - The destination chain: Layerswap network name or chain id.
+ */
+
+/**
+ * @typedef {Object} LayerswapSwidgeSupportedChain
+ * @property {string} id
+ * @property {string} name
+ * @property {string} type
+ * @property {string} nativeToken
+ */
+
+/**
+ * @typedef {Object} LayerswapSwidgeSupportedToken
+ * @property {string} token
+ * @property {string} chain
+ * @property {string} symbol
+ * @property {number} decimals
+ * @property {string} [address]
+ * @property {string} [name]
+ */
+
+/**
+ * @typedef {Object} LayerswapSwidgeSupportedTokensOptions
+ * @property {string | number} [fromChain]
+ * @property {string} [fromToken]
+ * @property {string | number} [toChain]
  */
 
 /**
@@ -132,7 +167,7 @@ export function mapSwapTransactions (transactions) {
  * Layerswap's swap-level status can lag behind it (e.g. a swap can sit in
  * `ls_transfer_pending` after the payout has already confirmed on-chain).
  *
- * @param {import('./layerswap-api-client.js').LayerswapSwap} swap
+ * @param {LayerswapSwap} swap
  * @returns {LayerswapSwidgeStatus}
  */
 export function deriveSwidgeStatus (swap) {
@@ -153,13 +188,31 @@ export function deriveSwidgeStatus (swap) {
  * Builds a WDK swidge status result from a `GET /api/v2/swaps/{id}` response.
  * The status is transaction-first (see {@link deriveSwidgeStatus}).
  *
+ * The optional chain hints constrain the lookup: if the swap's source (destination)
+ * network does not match `fromChain` (`toChain`) — compared case-insensitively against
+ * the Layerswap network name and its chain id — no swidge exists for the given id on
+ * those chains, and a `NoSuchElementError` is thrown.
+ *
  * @param {LayerswapSwapResponse} response
+ * @param {LayerswapSwidgeStatusOptions} [options] - Optional chain hints.
  * @returns {LayerswapSwidgeStatusResult}
+ * @throws {ProviderError} If the response is missing the swap details.
+ * @throws {NoSuchElementError} If the swap does not match the given chain hints.
  */
-export function buildStatusResult (response) {
+export function buildStatusResult (response, options = {}) {
   const swap = response?.swap
   if (!swap || !swap.id) {
-    throw new Error('Layerswap response is missing swap details.')
+    throw new ProviderError('Layerswap response is missing swap details.', {
+      reason: ProviderErrorReason.INTERNAL_SERVER_ERROR
+    })
+  }
+
+  if (options.fromChain !== undefined && !matchesChain(swap.source_network, options.fromChain)) {
+    throw new NoSuchElementError(`No swidge with id '${swap.id}' exists from chain '${options.fromChain}'.`)
+  }
+
+  if (options.toChain !== undefined && !matchesChain(swap.destination_network, options.toChain)) {
+    throw new NoSuchElementError(`No swidge with id '${swap.id}' exists to chain '${options.toChain}'.`)
   }
 
   return {
@@ -169,10 +222,29 @@ export function buildStatusResult (response) {
 }
 
 /**
+ * Tests whether a Layerswap network matches a chain identifier (network name or chain id).
+ *
+ * @private
+ * @param {LayerswapNetwork | string | undefined} network
+ * @param {string | number} chain
+ * @returns {boolean}
+ */
+function matchesChain (network, chain) {
+  if (network === undefined || network === null) return false
+
+  const target = String(chain).toLowerCase()
+
+  if (typeof network === 'string') return network.toLowerCase() === target
+
+  return network.name?.toLowerCase() === target ||
+    (network.chain_id != null && String(network.chain_id).toLowerCase() === target)
+}
+
+/**
  * Maps the Layerswap network catalog to WDK swidge supported chains.
  *
  * @param {LayerswapNetwork[]} networks
- * @returns {Array<{ id: string, name: string, type: string, nativeToken: string }>}
+ * @returns {LayerswapSwidgeSupportedChain[]}
  */
 export function buildSupportedChains (networks) {
   return networks.map((network) => ({
@@ -191,8 +263,8 @@ export function buildSupportedChains (networks) {
  * Layerswap's sources/destinations endpoints and is not applied here.
  *
  * @param {LayerswapNetwork[]} networks
- * @param {{ fromChain?: string | number, fromToken?: string, toChain?: string | number }} [options]
- * @returns {Array<{ token: string, chain: string, symbol: string, decimals: number, address?: string, name?: string }>}
+ * @param {LayerswapSwidgeSupportedTokensOptions} [options]
+ * @returns {LayerswapSwidgeSupportedToken[]}
  */
 export function buildSupportedTokens (networks, options = {}) {
   const scope = options.toChain ?? options.fromChain
@@ -316,18 +388,43 @@ export function parseCompletionTime (value) {
  *
  * @param {number} [slippage]
  * @returns {string | undefined}
+ * @throws {ValueError} If the slippage is not a non-negative number.
  */
 export function formatSlippage (slippage) {
   if (slippage === undefined || slippage === null) return undefined
 
   const percent = Number(slippage) * 100
   if (!Number.isFinite(percent) || percent < 0) {
-    throw new Error(`Invalid slippage value '${slippage}'. Expected a non-negative decimal (e.g. 0.01 for 1%).`)
+    throw new ValueError(`Invalid slippage value '${slippage}'. Expected a non-negative decimal (e.g. 0.01 for 1%).`)
   }
 
   // Trim binary float artifacts (e.g. 0.07 * 100 === 7.000000000000001).
   return String(Math.round(percent * 1e6) / 1e6)
 }
+
+/**
+ * Converts an integer option (an amount in base units, or basis points) to a bigint.
+ *
+ * @param {number | bigint | string | undefined} value - The option value.
+ * @param {string} name - The option name, used in the error message.
+ * @returns {bigint | undefined} The value as a bigint, or undefined if the option is not set.
+ * @throws {ValueError} If the value is not an integer.
+ */
+export function toBigIntOption (value, name) {
+  if (value === undefined) return undefined
+
+  try {
+    return BigInt(value)
+  } catch (_) {
+    throw new ValueError(`The '${name}' option must be an integer, got '${value}'.`)
+  }
+}
+
+/**
+ * @typedef {Object} LayerswapFeeGuardsConfig
+ * @property {number | bigint} [maxNetworkFeeBps] - Maximum network fee, in basis points of the input amount.
+ * @property {number | bigint} [maxProtocolFeeBps] - Maximum protocol fee, in basis points of the input amount.
+ */
 
 /**
  * Enforces the WDK `maxNetworkFeeBps` / `maxProtocolFeeBps` guards against a fee
@@ -340,10 +437,13 @@ export function formatSlippage (slippage) {
  * @param {LayerswapSwidgeFee[]} fees
  * @param {bigint} fromTokenAmount - The input amount in source-token base units.
  * @param {string} sourceTokenSymbol
- * @param {{ maxNetworkFeeBps?: number | bigint, maxProtocolFeeBps?: number | bigint }} [config]
+ * @param {LayerswapFeeGuardsConfig} [config]
+ * @throws {ValueError} If a guard is not an integer.
+ * @throws {MaximumFeeExceededError} If a fee exceeds its basis-points guard.
  */
 export function assertFeeGuards (fees, fromTokenAmount, sourceTokenSymbol, config = {}) {
-  const { maxNetworkFeeBps, maxProtocolFeeBps } = config
+  const maxNetworkFeeBps = toBigIntOption(config.maxNetworkFeeBps, 'maxNetworkFeeBps')
+  const maxProtocolFeeBps = toBigIntOption(config.maxProtocolFeeBps, 'maxProtocolFeeBps')
   if (maxNetworkFeeBps === undefined && maxProtocolFeeBps === undefined) return
   if (fromTokenAmount <= 0n) return
 
@@ -357,11 +457,59 @@ export function assertFeeGuards (fees, fromTokenAmount, sourceTokenSymbol, confi
     return (total * 10000n) / fromTokenAmount
   }
 
-  if (maxProtocolFeeBps !== undefined && sumBps('protocol') > BigInt(maxProtocolFeeBps)) {
-    throw new Error('Exceeded maximum protocol fee for swidge operation.')
+  if (maxProtocolFeeBps !== undefined && sumBps('protocol') > maxProtocolFeeBps) {
+    throw new MaximumFeeExceededError('Exceeded maximum protocol fee for swidge operation.')
   }
 
-  if (maxNetworkFeeBps !== undefined && sumBps('network') > BigInt(maxNetworkFeeBps)) {
-    throw new Error('Exceeded maximum network fee for swidge operation.')
+  if (maxNetworkFeeBps !== undefined && sumBps('network') > maxNetworkFeeBps) {
+    throw new MaximumFeeExceededError('Exceeded maximum network fee for swidge operation.')
   }
+}
+
+/**
+ * Names of the WDK errors the `ISwidgeProtocol` interface allows `quoteSwidge` / `swidge`
+ * to throw. Matched by name rather than `instanceof` because wallet packages may bundle a
+ * different copy of `@tetherto/wdk-wallet` than this package.
+ */
+const SWIDGE_ERROR_NAMES = new Set([
+  'AccountRequiredError',
+  'ReadOnlyAccountRequiredError',
+  'DisposalError',
+  'ValueError',
+  'InvalidTokenError',
+  'ProviderRequiredError',
+  'ProviderError',
+  'SwidgeError',
+  'MaximumFeeExceededError'
+])
+
+/**
+ * Normalizes an error raised by a wallet account (or by the chain SDK it relies on) so that
+ * it complies with the `ISwidgeProtocol` throw contract:
+ * - errors already in the contract are returned as-is;
+ * - `TransactionError` / `TransferError` with an insufficient-balance reason become a
+ *   `SwidgeError` with the same reason;
+ * - anything else is wrapped in a `ProviderError`, keeping the original error as `cause`.
+ *
+ * @param {unknown} error - The error raised by the wallet account.
+ * @returns {Error} The normalized error.
+ */
+export function normalizeWalletError (error) {
+  const name = /** @type {any} */ (error)?.name
+  const reason = /** @type {any} */ (error)?.reason
+
+  if (SWIDGE_ERROR_NAMES.has(name)) {
+    return /** @type {Error} */ (error)
+  }
+
+  const message = /** @type {any} */ (error)?.message ?? String(error)
+
+  if ((name === 'TransactionError' || name === 'TransferError') && Object.values(SwidgeErrorReason).includes(reason)) {
+    return new SwidgeError(message, { reason, cause: error })
+  }
+
+  return new ProviderError(`The wallet account failed to perform the operation: ${message}`, {
+    reason: ProviderErrorReason.INTERNAL_SERVER_ERROR,
+    cause: error
+  })
 }

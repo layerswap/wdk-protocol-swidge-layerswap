@@ -12,12 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/** @typedef {import('@tetherto/wdk-wallet/protocols').BridgeResult} BridgeResult */
+/** @typedef {import('@tetherto/wdk-wallet-btc').WalletAccountBtc} WalletAccountBtc */
+/** @typedef {import('@tetherto/wdk-wallet-btc').WalletAccountReadOnlyBtc} WalletAccountReadOnlyBtc */
 
-/** @typedef {import('./src/layerswap-protocol-bitcoin.js').LayerswapProtocolConfig} LayerswapProtocolConfig */
-
-/** @typedef {import('./src/layerswap-protocol-bitcoin.js').BridgeOptions} BridgeOptions */
-
-/** @typedef {import('./src/layerswap-protocol-bitcoin.js').LayerswapBridgeResult} LayerswapBridgeResult */
+/** @typedef {import('./src/layerswap-protocol-bitcoin.js').LayerswapBitcoinProtocolConfig} LayerswapBitcoinProtocolConfig */
+/** @typedef {import('./src/layerswap-protocol-bitcoin.js').LayerswapSpecificBitcoinProtocolConfig} LayerswapSpecificBitcoinProtocolConfig */
+/** @typedef {import('./src/layerswap-protocol-bitcoin.js').LayerswapSpecificBitcoinOptions} LayerswapSpecificBitcoinOptions */
+/** @typedef {import('./src/layerswap-protocol-bitcoin.js').LayerswapBitcoinSwidgeOptions} LayerswapBitcoinSwidgeOptions */
+/** @typedef {import('./src/layerswap-protocol-bitcoin.js').LayerswapBitcoinBridgeOptions} LayerswapBitcoinBridgeOptions */
+/** @typedef {import('./src/layerswap-protocol-bitcoin.js').LayerswapBitcoinSignedPsbt} LayerswapBitcoinSignedPsbt */
 
 export { default } from './src/layerswap-protocol-bitcoin.js'
+
+export * from '@layerswap/wdk-protocol-swidge-layerswap-core/protocol'

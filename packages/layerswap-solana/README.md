@@ -2,14 +2,15 @@
 
 WDK module that lets `@tetherto/wdk-wallet-solana` accounts swap and bridge tokens across chains via the Layerswap public API. Implements `SwidgeProtocol` from `@tetherto/wdk-wallet/protocols`: `quoteSwidge` / `swidge` / `getSwidgeStatus` / `getSupportedChains` / `getSupportedTokens`.
 
-Sibling of `@layerswap/wdk-protocol-swidge-layerswap-evm`. Shares HTTP/network/decimal plumbing via `@layerswap/wdk-protocol-swidge-layerswap-core`.
+`LayerswapProtocolSolana` is a thin subclass of `LayerswapSwidgeProtocol` from `@layerswap/wdk-protocol-swidge-layerswap-core`, which implements the whole chain-agnostic swidge flow (quotes, fee guards, swap creation, status, discovery, the legacy `bridge`/`quoteBridge` adapters) and the WDK error contract. This package only adds the Solana specifics listed below. Its entry point re-exports the shared public API (types, `LayerswapApiClient`, `LayerswapSwidgeProtocol`, WDK error classes) from `@layerswap/wdk-protocol-swidge-layerswap-core/protocol`.
 
 ## Install
 
 ```bash
-npm install @layerswap/wdk-protocol-swidge-layerswap-solana \
-            @tetherto/wdk-wallet @tetherto/wdk-wallet-solana
+npm install @layerswap/wdk-protocol-swidge-layerswap-solana
 ```
+
+`@tetherto/wdk-wallet` and `@tetherto/wdk-wallet-solana` are regular dependencies of this package, pinned to exact versions (the WDK is still in pre-release, and beta versions may ship breaking changes).
 
 ## Quick example
 
@@ -49,34 +50,22 @@ const result = await protocol.swidge({
 const status = await protocol.getSwidgeStatus(result.id)
 // status.status: 'pending' | 'completed' | 'failed' | ... — plus observed transactions
 
+// Optional chain hints constrain the lookup: a swap on other chains is reported as not found.
+await protocol.getSwidgeStatus(result.id, { fromChain: 'SOLANA_MAINNET', toChain: 'ARBITRUM_MAINNET' })
+
 // Discovery (also works without an account: new LayerswapSolana(undefined))
 const chains = await protocol.getSupportedChains()
 const tokens = await protocol.getSupportedTokens({ toChain: 'SOLANA_MAINNET' })
 ```
 
-### Legacy bridge surface
+The legacy `bridge` / `quoteBridge` surface, the semantics of fee entries, `getSwidgeStatus` chain hints and the full error table are documented once in the [core package README](../layerswap-core/README.md) — they are identical for every VM package.
 
-The pre-swidge `bridge` / `quoteBridge` methods are kept as thin adapters over `swidge` / `quoteSwidge` for backwards compatibility:
+## Solana specifics
 
-```js
-const { hash, fee, bridgeFee, swapId } = await protocol.bridge({
-  targetChain: 'ARBITRUM_MAINNET',
-  recipient: '0xa460AEbce0d3A4BecAd8ccf9D6D4861296c503Bd',
-  token: 'USDC',
-  amount: 10_000_000n,
-  slippage: '0.5' // legacy: percent string (swidge takes a decimal, 0.005)
-})
-```
-
-`fee` sums the non-included fee entries (source-chain gas, lamports); `bridgeFee` sums the included entries (Layerswap's fee, source-token base units); `swapId` is the Layerswap swap id for `getSwidgeStatus`.
-
-## Semantic notes
-
-- Layerswap is HTTP-orchestrated and exact-in only: `swidge()` rejects `toTokenAmount` (exact-out) options, and same-chain swaps are not supported (`toChain` is required and must differ from the source chain).
-- Fee entries: Layerswap deducts its fees from the source amount, so the 'protocol' and Layerswap 'network' entries are denominated in the **source token** with `included: true`. Source-chain gas is a separate non-included 'network' entry in **SOL (lamports)**. Never sum amounts across entries with different `token` values. `bridgeMaxFee` is compared against the included fees only; the WDK `maxNetworkFeeBps`/`maxProtocolFeeBps` guards are also enforced.
-- Source network detection uses the connected RPC's genesis hash → known network name table (`SOLANA_MAINNET`, `SOLANA_DEVNET`, `SOLANA_TESTNET`). Pass `fromChain: 'SOLANA_<...>'` in the swidge options (legacy: `sourceChain`) to override.
-- `recipient` defaults to the account's own address only when the destination network has the same address format (VM type) as Solana; cross-VM destinations (e.g. EVM chains) require an explicit `recipient`.
-- `call_data` returned by Layerswap is treated as a base64-encoded legacy Solana `Transaction` wire format and broadcast as-is (matches Layerswap's own web app code path). The package uses `@solana/web3.js` to deserialise and broadcast — the `@tetherto/wdk-wallet-solana` account only provides identity (`getAddress`, `keyPair`).
+- **Source cluster detection:** the genesis hash reported by the account's rpc client is mapped to a Layerswap network (`SOLANA_MAINNET`, `SOLANA_DEVNET`, `SOLANA_TESTNET`). The rpc client is the one the wallet account was built with (`account._rpc`), so every provider shape the wallet supports (rpc url, rpc client, or a fail-over list of them) works as-is. A `fromChain` (legacy: `sourceChain`) must match the rpc cluster; for an rpc on another svm chain Layerswap lists (e.g. Eclipse), whose genesis hash is not known, pass its `fromChain`. Without it an unknown genesis hash throws a `ValueError`; a missing rpc throws a `ProviderRequiredError`.
+- **Deposit transaction:** Layerswap's `call_data` is a base64-encoded, unsigned legacy Solana transaction. It is quoted, signed and broadcast through the wallet account (`account.quoteSendTransaction(callData)` / `account.sendTransaction(callData)`), so the wallet's `transactionMaxFee` option is honoured too. Missing or malformed `call_data` throws a `ProviderError`.
+- **Fees:** the source-chain gas entry is in **lamports** (`token: 'SOL'`). Quotes approximate it with the 5000-lamport per-signature fee; `swidge()` reports the fee quoted by the wallet for the actual deposit transaction.
+- **Accounts:** read-only accounts (no `keyPair` / `sendTransaction`) get an `AccountRequiredError`; a disposed `WalletAccountSolana` (its `keyPair.privateKey` erased to `null`) gets a `DisposalError`.
 
 ## Development
 

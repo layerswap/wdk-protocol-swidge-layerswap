@@ -10,6 +10,8 @@ export type LayerswapToken = import('./layerswap-api-client.js').LayerswapToken;
  * @param {LayerswapApiClient} client
  * @param {number | bigint} chainId
  * @returns {Promise<LayerswapNetwork>}
+ * @throws {ValueError} If Layerswap does not support the chain id.
+ * @throws {ProviderError} If the Layerswap API fails to return the network catalog.
  */
 export declare function resolveSourceNetwork(client: LayerswapApiClient, chainId: number | bigint): Promise<LayerswapNetwork>;
 /**
@@ -18,6 +20,8 @@ export declare function resolveSourceNetwork(client: LayerswapApiClient, chainId
  * @param {LayerswapApiClient} client
  * @param {string} name
  * @returns {Promise<LayerswapNetwork>}
+ * @throws {ValueError} If Layerswap does not support the network.
+ * @throws {ProviderError} If the Layerswap API fails to return the network catalog.
  */
 export declare function resolveNetworkByName(client: LayerswapApiClient, name: string): Promise<LayerswapNetwork>;
 /**
@@ -27,6 +31,7 @@ export declare function resolveNetworkByName(client: LayerswapApiClient, name: s
  * @param {LayerswapNetwork} network
  * @param {string} identifier - Contract address (0x…) or Layerswap symbol (e.g. 'USDC').
  * @returns {LayerswapToken}
+ * @throws {InvalidTokenError} If the token is not supported on the network.
  */
 export declare function resolveToken(network: LayerswapNetwork, identifier: string): LayerswapToken;
 /**

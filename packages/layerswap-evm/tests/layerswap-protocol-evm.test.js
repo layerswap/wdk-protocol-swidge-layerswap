@@ -1,9 +1,37 @@
-import { afterEach, beforeEach, describe, expect, jest, test } from '@jest/globals'
+// Tests of the EVM specifics only: source chain detection, account detection, gas quotes,
+// the deposit transaction and wallet error mapping. The chain-agnostic swidge behaviour
+// (quotes, guards, status, bridge adapters, discovery, …) is covered once by the
+// `LayerswapSwidgeProtocol` tests in `@layerswap/wdk-protocol-swidge-layerswap-core`.
 
-import { WalletAccountEvm } from '@tetherto/wdk-wallet-evm'
+import { describe, expect, jest, test } from '@jest/globals'
+
+import { WalletAccountEvm, WalletAccountReadOnlyEvm } from '@tetherto/wdk-wallet-evm'
 import { WalletAccountEvmErc4337 } from '@tetherto/wdk-wallet-evm-erc-4337'
 
-import LayerswapProtocolEvm from '../index.js'
+import { JsonRpcProvider, makeError } from 'ethers'
+
+import {
+  http,
+  HttpResponse,
+  layerswapApi,
+  recordRequests,
+  setupLayerswapServer
+} from '@layerswap/wdk-protocol-swidge-layerswap-test-utils'
+
+import LayerswapProtocolEvm, {
+  AccountRequiredError,
+  BridgeError,
+  DisposalError,
+  ProviderError,
+  ProviderRequiredError,
+  SwidgeError,
+  SwidgeErrorReason,
+  ValueError
+} from '../index.js'
+
+const RPC_URL = 'https://rpc.example/eth'
+
+const SEED_PHRASE = 'test test test test test test test test test test test junk'
 
 const USER_ADDRESS = '0xa460AEbce0d3A4BecAd8ccf9D6D4861296c503Bd'
 const DEPOSIT_ADDRESS = '0x1111111111111111111111111111111111111111'
@@ -15,8 +43,8 @@ const ETHEREUM_NETWORK = {
   chain_id: '1',
   type: 'evm',
   tokens: [
-    { symbol: 'USDC', contract: USDC_CONTRACT, decimals: 6, price_in_usd: 1 },
-    { symbol: 'ETH', contract: null, decimals: 18, price_in_usd: 3000 }
+    { symbol: 'USDC', contract: USDC_CONTRACT, decimals: 6 },
+    { symbol: 'ETH', contract: null, decimals: 18 }
   ]
 }
 
@@ -25,37 +53,33 @@ const ARBITRUM_NETWORK = {
   chain_id: '42161',
   type: 'evm',
   tokens: [
-    { symbol: 'USDC', contract: '0xaf88d065e77c8cc2239327c5edb3a432268e5831', decimals: 6, price_in_usd: 1 },
-    { symbol: 'ETH', contract: null, decimals: 18, price_in_usd: 3000 }
+    { symbol: 'USDC', contract: '0xaf88d065e77c8cc2239327c5edb3a432268e5831', decimals: 6 },
+    { symbol: 'ETH', contract: null, decimals: 18 }
   ]
 }
 
 const NETWORKS = [ETHEREUM_NETWORK, ARBITRUM_NETWORK]
 
-function buildFetchRouter (handlers) {
-  return jest.fn((url, init) => {
-    const method = (init && init.method) ?? 'GET'
-    const u = new URL(url)
-    const path = u.pathname
-    const search = u.search
+const depositAction = ({ isErc20 = true } = {}) => ({
+  type: 'transfer',
+  order: 1,
+  to_address: DEPOSIT_ADDRESS,
+  amount: 100,
+  amount_in_base_units: isErc20 ? '100000000' : '100000000000000000',
+  call_data: isErc20 ? ERC20_CALLDATA : '0x'
+})
 
-    for (const handler of handlers) {
-      if (handler.method !== method) continue
-      if (!handler.match.test(path + search)) continue
-      const body = handler.body(url, init)
-      const text = JSON.stringify(body)
-      return Promise.resolve({
-        ok: handler.status >= 200 && handler.status < 300,
-        status: handler.status,
-        statusText: handler.status === 200 ? 'OK' : 'Error',
-        text: () => Promise.resolve(text),
-        json: () => Promise.resolve(body)
-      })
-    }
+const server = setupLayerswapServer()
 
-    throw new Error(`Unmocked fetch: ${method} ${path}${search}`)
-  })
-}
+const useSwapHandlers = (action = depositAction()) =>
+  server.use(...layerswapApi.swidgeFlow({ networks: NETWORKS, depositActions: [action] }))
+
+/** Mocks the JSON-RPC endpoint of an rpc-url provider. */
+const rpcHandler = (chainIdHex = '0x1') => http.post(RPC_URL, async ({ request }) => {
+  const payload = await request.json()
+  const reply = ({ id, method }) => ({ jsonrpc: '2.0', id, result: method === 'eth_chainId' ? chainIdHex : '0x1' })
+  return HttpResponse.json(Array.isArray(payload) ? payload.map(reply) : reply(payload))
+})
 
 function makeEip1193Provider ({ chainIdHex = '0x1' } = {}) {
   return {
@@ -71,703 +95,210 @@ function makeEip1193Provider ({ chainIdHex = '0x1' } = {}) {
   }
 }
 
-function makeAccount ({ writable = true, provider = makeEip1193Provider(), kind = 'standard' } = {}) {
-  const base = {
-    _config: { provider },
+/**
+ * Builds a duck-typed wallet account. The provider is built exactly like the real
+ * wdk evm wallet does (`account._provider`), so every provider shape is exercised.
+ */
+function makeAccount ({ provider = makeEip1193Provider(), kind = 'standard' } = {}) {
+  const config = provider ? { provider } : {}
+
+  const account = {
+    _config: config,
+    _provider: WalletAccountReadOnlyEvm._buildProvider(config),
+    keyPair: { publicKey: new Uint8Array(33), privateKey: new Uint8Array(32) },
     getAddress: jest.fn().mockResolvedValue(USER_ADDRESS),
     quoteSendTransaction: jest.fn().mockResolvedValue({ fee: 12_345n }),
-    quoteTransfer: jest.fn().mockResolvedValue({ fee: 67_890n })
+    quoteTransfer: jest.fn().mockResolvedValue({ fee: 67_890n }),
+    sendTransaction: jest.fn().mockResolvedValue({ hash: 'dummy-hash', fee: 12_345n })
   }
 
-  if (writable) {
-    base.sendTransaction = jest.fn().mockResolvedValue({ hash: 'dummy-hash', fee: 12_345n })
-  }
-
-  const proto = kind === 'erc4337'
-    ? WalletAccountEvmErc4337.prototype
-    : WalletAccountEvm.prototype
-
-  Object.setPrototypeOf(base, proto)
-  return base
+  Object.setPrototypeOf(account, kind === 'erc4337' ? WalletAccountEvmErc4337.prototype : WalletAccountEvm.prototype)
+  return account
 }
 
-const NETWORKS_HANDLER = {
-  method: 'GET',
-  match: /^\/api\/v2\/networks$/,
-  status: 200,
-  body: () => ({ data: NETWORKS })
+const SWIDGE_OPTIONS = {
+  fromToken: USDC_CONTRACT,
+  toChain: 'arbitrum',
+  recipient: USER_ADDRESS,
+  fromTokenAmount: 100_000_000n
 }
-
-const QUOTE_HANDLER = (overrides = {}) => ({
-  method: 'GET',
-  match: /^\/api\/v2\/quote\?/,
-  status: 200,
-  body: () => ({
-    data: {
-      quote: {
-        total_fee: 0.5,
-        receive_amount: 99.5,
-        min_receive_amount: 99,
-        total_fee_in_usd: 0.5,
-        blockchain_fee: 0.1,
-        service_fee: 0.4,
-        ...overrides
-      }
-    }
-  })
-})
-
-const CREATE_SWAP_HANDLER = ({ swapId = 'swap-id-1', isErc20 = true } = {}) => ({
-  method: 'POST',
-  match: /^\/api\/v2\/swaps$/,
-  status: 200,
-  body: () => ({
-    data: {
-      swap: { id: swapId, status: 'created' },
-      quote: { quote: { total_fee: 0.5 } },
-      deposit_actions: [{
-        type: 'transfer',
-        order: 1,
-        to_address: DEPOSIT_ADDRESS,
-        amount: 100,
-        amount_in_base_units: isErc20 ? '100000000' : '100000000000000000',
-        call_data: isErc20 ? ERC20_CALLDATA : '0x',
-        token: isErc20
-          ? { symbol: 'USDC', contract: USDC_CONTRACT, decimals: 6 }
-          : { symbol: 'ETH', contract: null, decimals: 18 },
-        fee_token: { symbol: 'ETH', contract: null, decimals: 18 },
-        network: ETHEREUM_NETWORK
-      }]
-    }
-  })
-})
-
-const SPEEDUP_HANDLER = (swapId, status = 200) => ({
-  method: 'POST',
-  match: new RegExp(`^/api/v2/swaps/${swapId}/deposit_speedup$`),
-  status,
-  body: () => status >= 200 && status < 300
-    ? ({ data: null })
-    : ({ error: { code: 'SPEEDUP_FAILED', message: 'boom' } })
-})
 
 describe('LayerswapProtocolEvm', () => {
-  let originalFetch
+  describe('source chain detection', () => {
+    test.each([
+      ['an eip-1193 provider', () => makeEip1193Provider({ chainIdHex: '0xa4b1' })],
+      ['an rpc url', () => RPC_URL],
+      ['an ethers provider', () => new JsonRpcProvider(RPC_URL)],
+      ['a fail-over list of providers', () => [RPC_URL, makeEip1193Provider({ chainIdHex: '0xa4b1' })]]
+    ])('detects the source chain through the account provider built from %s', async (_, buildProvider) => {
+      server.use(layerswapApi.networks(NETWORKS), layerswapApi.quote(), rpcHandler('0xa4b1'))
 
-  beforeEach(() => {
-    originalFetch = global.fetch
-  })
+      const protocol = new LayerswapProtocolEvm(makeAccount({ provider: buildProvider() }))
 
-  afterEach(() => {
-    global.fetch = originalFetch
-    jest.restoreAllMocks()
-  })
+      const quote = await protocol.quoteSwidge({ fromToken: 'USDC', toChain: 'ethereum', fromTokenAmount: 100_000_000n })
 
-  describe('constructor', () => {
-    test('works without any config (apiKey is optional)', () => {
-      const account = makeAccount()
-      const protocol = new LayerswapProtocolEvm(account)
-      expect(protocol.getApiClient()).toBeDefined()
+      expect(quote.fees[0].chain).toBe('arbitrum')
     })
 
-    test('accepts a config with apiKey set', () => {
-      const account = makeAccount()
-      const protocol = new LayerswapProtocolEvm(account, { apiKey: 'test-key' })
-      expect(protocol.getApiClient()).toBeDefined()
-    })
-  })
+    test('throws a ProviderRequiredError when the account has no provider and fromChain is omitted', async () => {
+      server.use(layerswapApi.networks(NETWORKS))
 
-  describe('api client', () => {
-    test('omits X-LS-APIKEY header when apiKey is not set', async () => {
-      const fetchMock = buildFetchRouter([NETWORKS_HANDLER])
-      global.fetch = fetchMock
-
-      const account = makeAccount()
-      const protocol = new LayerswapProtocolEvm(account)
-      await protocol.getApiClient().getNetworks()
-
-      const [, init] = fetchMock.mock.calls[0]
-      expect(init.headers['X-LS-APIKEY']).toBeUndefined()
+      await expect(new LayerswapProtocolEvm(makeAccount({ provider: null })).quoteSwidge(SWIDGE_OPTIONS))
+        .rejects.toThrow(ProviderRequiredError)
     })
 
-    test('sends X-LS-APIKEY header when apiKey is set', async () => {
-      const fetchMock = buildFetchRouter([NETWORKS_HANDLER])
-      global.fetch = fetchMock
+    test('throws a ValueError, without sending, when fromChain is not the provider chain', async () => {
+      useSwapHandlers()
 
       const account = makeAccount()
-      const protocol = new LayerswapProtocolEvm(account, { apiKey: 'my-key' })
-      await protocol.getApiClient().getNetworks()
 
-      const [, init] = fetchMock.mock.calls[0]
-      expect(init.headers['X-LS-APIKEY']).toBe('my-key')
+      await expect(new LayerswapProtocolEvm(account).swidge({ ...SWIDGE_OPTIONS, fromToken: 'USDC', fromChain: 'arbitrum', toChain: 'ethereum' }))
+        .rejects.toThrow("The 'fromChain' option is 'arbitrum', but the wallet account is connected to 'ethereum'.")
+      expect(account.sendTransaction).not.toHaveBeenCalled()
+    })
+
+    test('throws a ValueError when the chain id is not in the Layerswap networks', async () => {
+      server.use(layerswapApi.networks(NETWORKS))
+
+      const account = makeAccount({ provider: makeEip1193Provider({ chainIdHex: '0xdeadbeef' }) })
+
+      const error = await new LayerswapProtocolEvm(account).quoteSwidge(SWIDGE_OPTIONS).catch((err) => err)
+
+      expect(error).toBeInstanceOf(ValueError)
+      expect(error.message).toMatch(/does not support source chain/)
     })
   })
 
-  describe('quoteBridge', () => {
-    test('returns fee and bridgeFee for an ERC-20 source (resolved by contract)', async () => {
-      global.fetch = buildFetchRouter([
-        NETWORKS_HANDLER,
-        QUOTE_HANDLER()
-      ])
+  describe('gas quote', () => {
+    test('quotes an erc-20 transfer for erc-20 sources', async () => {
+      server.use(layerswapApi.networks(NETWORKS), layerswapApi.quote())
 
       const account = makeAccount()
-      const protocol = new LayerswapProtocolEvm(account, { apiKey: 'test-key' })
+      const quote = await new LayerswapProtocolEvm(account).quoteSwidge(SWIDGE_OPTIONS)
 
-      const result = await protocol.quoteBridge({
-        targetChain: 'arbitrum',
-        recipient: USER_ADDRESS,
-        token: USDC_CONTRACT,
-        amount: 100_000_000n
-      })
-
-      expect(account.quoteTransfer).toHaveBeenCalledWith({
-        token: USDC_CONTRACT,
-        recipient: USER_ADDRESS,
-        amount: 100_000_000n
-      })
+      expect(account.quoteTransfer).toHaveBeenCalledWith({ token: USDC_CONTRACT, recipient: USER_ADDRESS, amount: 100_000_000n })
       expect(account.quoteSendTransaction).not.toHaveBeenCalled()
-      expect(result).toEqual({ fee: 67_890n, bridgeFee: 500_000n })
+      expect(quote.fees.at(-1)).toEqual({ type: 'network', amount: 67_890n, token: 'ETH', chain: 'ethereum', included: false, description: 'Source-chain gas' })
     })
 
-    test('returns fee and bridgeFee for an ERC-20 source resolved by symbol', async () => {
-      global.fetch = buildFetchRouter([
-        NETWORKS_HANDLER,
-        QUOTE_HANDLER()
-      ])
+    test('quotes a native send for native sources', async () => {
+      server.use(layerswapApi.networks(NETWORKS), layerswapApi.quote())
 
       const account = makeAccount()
-      const protocol = new LayerswapProtocolEvm(account, { apiKey: 'test-key' })
+      const quote = await new LayerswapProtocolEvm(account).quoteSwidge({ ...SWIDGE_OPTIONS, fromToken: 'ETH', fromTokenAmount: 10n ** 18n })
 
-      const result = await protocol.quoteBridge({
-        targetChain: 'arbitrum',
-        recipient: USER_ADDRESS,
-        token: 'USDC',
-        amount: 100_000_000n
-      })
-
-      expect(result.bridgeFee).toBe(500_000n)
-    })
-
-    test('uses quoteSendTransaction for native source token', async () => {
-      global.fetch = buildFetchRouter([
-        NETWORKS_HANDLER,
-        QUOTE_HANDLER({ total_fee: 0.001, service_fee: 0.0006, blockchain_fee: 0.0004 })
-      ])
-
-      const account = makeAccount()
-      const protocol = new LayerswapProtocolEvm(account, { apiKey: 'test-key' })
-
-      const result = await protocol.quoteBridge({
-        targetChain: 'arbitrum',
-        recipient: USER_ADDRESS,
-        token: 'ETH',
-        amount: 1_000_000_000_000_000_000n
-      })
-
-      expect(account.quoteSendTransaction).toHaveBeenCalledWith({
-        to: USER_ADDRESS,
-        value: 1_000_000_000_000_000_000n
-      })
+      expect(account.quoteSendTransaction).toHaveBeenCalledWith({ to: USER_ADDRESS, value: 10n ** 18n })
       expect(account.quoteTransfer).not.toHaveBeenCalled()
-      expect(result.fee).toBe(12_345n)
-      expect(result.bridgeFee).toBe(1_000_000_000_000_000n)
-    })
-
-    test('surfaces Layerswap API errors', async () => {
-      global.fetch = buildFetchRouter([
-        NETWORKS_HANDLER,
-        {
-          method: 'GET',
-          match: /^\/api\/v2\/quote\?/,
-          status: 400,
-          body: () => ({ error: { code: 'ROUTE_NOT_FOUND_ERROR', message: 'no route' } })
-        }
-      ])
-
-      const account = makeAccount()
-      const protocol = new LayerswapProtocolEvm(account, { apiKey: 'test-key' })
-
-      await expect(protocol.quoteBridge({
-        targetChain: 'arbitrum',
-        recipient: USER_ADDRESS,
-        token: 'USDC',
-        amount: 100_000_000n
-      })).rejects.toThrow(/ROUTE_NOT_FOUND_ERROR/)
-    })
-
-    test('throws when account has no provider configured', async () => {
-      const account = makeAccount()
-      account._config = {}
-      const protocol = new LayerswapProtocolEvm(account, { apiKey: 'test-key' })
-
-      global.fetch = buildFetchRouter([NETWORKS_HANDLER])
-
-      await expect(protocol.quoteBridge({
-        targetChain: 'arbitrum',
-        recipient: USER_ADDRESS,
-        token: 'USDC',
-        amount: 100_000_000n
-      })).rejects.toThrow(/provider/)
+      expect(quote.fees.at(-1).amount).toBe(12_345n)
     })
   })
 
-  describe('bridge', () => {
-    test('happy path (ERC-20): builds deposit tx with calldata and value=0', async () => {
-      global.fetch = buildFetchRouter([
-        NETWORKS_HANDLER,
-        CREATE_SWAP_HANDLER({ isErc20: true }),
-        SPEEDUP_HANDLER('swap-id-1')
-      ])
+  describe('deposit transaction', () => {
+    test('erc-20: sends the Layerswap calldata with value=0, and quotes its gas', async () => {
+      useSwapHandlers(depositAction({ isErc20: true }))
 
       const account = makeAccount()
-      const protocol = new LayerswapProtocolEvm(account, { apiKey: 'test-key' })
-
-      const result = await protocol.bridge({
-        targetChain: 'arbitrum',
-        recipient: USER_ADDRESS,
-        token: USDC_CONTRACT,
-        amount: 100_000_000n
-      })
+      const result = await new LayerswapProtocolEvm(account).swidge(SWIDGE_OPTIONS)
 
       const expectedTx = { to: DEPOSIT_ADDRESS, value: 0n, data: ERC20_CALLDATA }
       expect(account.quoteSendTransaction).toHaveBeenCalledWith(expectedTx)
       expect(account.sendTransaction).toHaveBeenCalledWith(expectedTx)
-      expect(result).toEqual({ hash: 'dummy-hash', fee: 12_345n, bridgeFee: 500_000n, swapId: 'swap-id-1' })
+      expect(result).toMatchObject({ id: 'swap-id-1', hash: 'dummy-hash' })
+      expect(result.fees.at(-1)).toMatchObject({ type: 'network', amount: 12_345n, token: 'ETH', included: false })
     })
 
-    test('happy path (native): value is amount_in_base_units, data is 0x', async () => {
-      global.fetch = buildFetchRouter([
-        NETWORKS_HANDLER,
-        CREATE_SWAP_HANDLER({ swapId: 'swap-id-2', isErc20: false }),
-        SPEEDUP_HANDLER('swap-id-2')
-      ])
+    test('native: sends amount_in_base_units as value, with empty calldata', async () => {
+      useSwapHandlers(depositAction({ isErc20: false }))
 
       const account = makeAccount()
-      const protocol = new LayerswapProtocolEvm(account, { apiKey: 'test-key' })
+      await new LayerswapProtocolEvm(account).swidge({ ...SWIDGE_OPTIONS, fromToken: 'ETH', fromTokenAmount: 10n ** 17n })
 
-      const result = await protocol.bridge({
-        targetChain: 'arbitrum',
-        recipient: USER_ADDRESS,
-        token: 'ETH',
-        amount: 100_000_000_000_000_000n
-      })
-
-      const expectedTx = { to: DEPOSIT_ADDRESS, value: 100_000_000_000_000_000n, data: '0x' }
-      expect(account.sendTransaction).toHaveBeenCalledWith(expectedTx)
-      expect(result.hash).toBe('dummy-hash')
-      expect(result.swapId).toBe('swap-id-2')
+      expect(account.sendTransaction).toHaveBeenCalledWith({ to: DEPOSIT_ADDRESS, value: 10n ** 17n, data: '0x' })
     })
 
-    test('happy path (ERC-4337): routes through array-form sendTransaction with config', async () => {
-      global.fetch = buildFetchRouter([
-        NETWORKS_HANDLER,
-        CREATE_SWAP_HANDLER({ swapId: 'swap-id-4337', isErc20: true }),
-        SPEEDUP_HANDLER('swap-id-4337')
-      ])
+    test.each([
+      ['missing', undefined],
+      ['above the requested amount', '100000000000000001']
+    ])('native: throws a ProviderError, without sending, when amount_in_base_units is %s', async (_, amount) => {
+      useSwapHandlers({ ...depositAction({ isErc20: false }), amount_in_base_units: amount })
+
+      const account = makeAccount()
+      await expect(new LayerswapProtocolEvm(account).swidge({ ...SWIDGE_OPTIONS, fromToken: 'ETH', fromTokenAmount: 10n ** 17n }))
+        .rejects.toThrow(ProviderError)
+      expect(account.sendTransaction).not.toHaveBeenCalled()
+    })
+
+    test('erc-4337: routes through the array form, forwarding the wallet configuration overrides', async () => {
+      useSwapHandlers()
 
       const account = makeAccount({ kind: 'erc4337' })
-      const protocol = new LayerswapProtocolEvm(account, { apiKey: 'test-key' })
+      const overrides = { paymasterToken: { address: '0xfeeee' } }
 
-      const overrideConfig = { paymasterToken: { address: '0xfeeee' } }
-
-      const result = await protocol.bridge({
-        targetChain: 'arbitrum',
-        recipient: USER_ADDRESS,
-        token: USDC_CONTRACT,
-        amount: 100_000_000n
-      }, overrideConfig)
+      await new LayerswapProtocolEvm(account).bridge({ targetChain: 'arbitrum', recipient: USER_ADDRESS, token: USDC_CONTRACT, amount: 100_000_000n }, overrides)
 
       const expectedTx = { to: DEPOSIT_ADDRESS, value: 0n, data: ERC20_CALLDATA }
-      expect(account.quoteSendTransaction).toHaveBeenCalledWith([expectedTx], overrideConfig)
-      expect(account.sendTransaction).toHaveBeenCalledWith([expectedTx], overrideConfig)
-      expect(result.swapId).toBe('swap-id-4337')
+      expect(account.quoteSendTransaction).toHaveBeenCalledWith([expectedTx], overrides)
+      expect(account.sendTransaction).toHaveBeenCalledWith([expectedTx], overrides)
     })
 
-    test('throws when account is read-only (no instanceof match)', async () => {
-      // A plain object (no WalletAccountEvm/Erc4337 prototype) represents the read-only
-      // case from the protocol's perspective — the instanceof gate rejects it.
-      const account = {
-        _config: { provider: 'https://rpc.example/eth' },
-        getAddress: jest.fn().mockResolvedValue(USER_ADDRESS)
-      }
-      const protocol = new LayerswapProtocolEvm(account, { apiKey: 'test-key' })
+    test('throws a ProviderError when the deposit action has no destination address', async () => {
+      useSwapHandlers({ ...depositAction(), to_address: undefined })
 
-      await expect(protocol.bridge({
-        targetChain: 'arbitrum',
-        recipient: USER_ADDRESS,
-        token: 'USDC',
-        amount: 100_000_000n
-      })).rejects.toThrow(/non read-only account/)
-    })
-
-    test('throws when bridgeFee exceeds bridgeMaxFee, and does not send', async () => {
-      global.fetch = buildFetchRouter([
-        NETWORKS_HANDLER,
-        CREATE_SWAP_HANDLER({ isErc20: true })
-      ])
-
-      const account = makeAccount()
-      const protocol = new LayerswapProtocolEvm(account, {
-        apiKey: 'test-key',
-        bridgeMaxFee: 100_000n // 0.1 USDC — quote returns 0.5 USDC = 500_000 base units
-      })
-
-      await expect(protocol.bridge({
-        targetChain: 'arbitrum',
-        recipient: USER_ADDRESS,
-        token: USDC_CONTRACT,
-        amount: 100_000_000n
-      })).rejects.toThrow(/Exceeded maximum fee cost for bridge operation\./)
-
-      expect(account.sendTransaction).not.toHaveBeenCalled()
-    })
-
-    test('swallows speedup endpoint failure without affecting the result', async () => {
-      const fetchMock = buildFetchRouter([
-        NETWORKS_HANDLER,
-        CREATE_SWAP_HANDLER({ swapId: 'swap-id-3', isErc20: true }),
-        SPEEDUP_HANDLER('swap-id-3', 500)
-      ])
-      global.fetch = fetchMock
-
-      const account = makeAccount()
-      const protocol = new LayerswapProtocolEvm(account, { apiKey: 'test-key' })
-
-      const result = await protocol.bridge({
-        targetChain: 'arbitrum',
-        recipient: USER_ADDRESS,
-        token: USDC_CONTRACT,
-        amount: 100_000_000n
-      })
-
-      expect(result.hash).toBe('dummy-hash')
-
-      const calledSpeedup = fetchMock.mock.calls.some(([url]) => String(url).includes('/deposit_speedup'))
-      expect(calledSpeedup).toBe(true)
-    })
-
-    test('throws when source chain equals target chain', async () => {
-      global.fetch = buildFetchRouter([
-        NETWORKS_HANDLER
-      ])
-
-      const account = makeAccount()
-      const protocol = new LayerswapProtocolEvm(account, { apiKey: 'test-key' })
-
-      await expect(protocol.bridge({
-        targetChain: 'ethereum',
-        recipient: USER_ADDRESS,
-        token: USDC_CONTRACT,
-        amount: 100_000_000n
-      })).rejects.toThrow(/target chain cannot be equal to the source chain/)
-    })
-
-    test('throws when chainId is not in Layerswap networks', async () => {
-      global.fetch = buildFetchRouter([
-        NETWORKS_HANDLER
-      ])
-
-      const account = makeAccount({ provider: makeEip1193Provider({ chainIdHex: '0xdeadbeef' }) })
-      const protocol = new LayerswapProtocolEvm(account, { apiKey: 'test-key' })
-
-      await expect(protocol.bridge({
-        targetChain: 'arbitrum',
-        recipient: USER_ADDRESS,
-        token: USDC_CONTRACT,
-        amount: 100_000_000n
-      })).rejects.toThrow(/does not support source chain/)
+      await expect(new LayerswapProtocolEvm(makeAccount()).swidge(SWIDGE_OPTIONS)).rejects.toThrow(ProviderError)
     })
   })
 
-  describe('getTransactionStatus', () => {
-    test('resolves the network via provider chainId and forwards to the API client', async () => {
-      global.fetch = buildFetchRouter([
-        NETWORKS_HANDLER,
-        {
-          method: 'GET',
-          match: /^\/api\/v2\/transaction_status\?network=ethereum&transaction_id=0xaa$/,
-          status: 200,
-          body: () => ({ data: { status: 'completed' } })
-        }
-      ])
+  describe('accounts', () => {
+    test('throws an AccountRequiredError for read-only evm accounts', async () => {
+      const account = new WalletAccountReadOnlyEvm(USER_ADDRESS, { provider: makeEip1193Provider() })
 
-      const account = makeAccount()
-      const protocol = new LayerswapProtocolEvm(account)
-      await expect(protocol.getTransactionStatus('0xaa')).resolves.toEqual({ status: 'completed' })
+      await expect(new LayerswapProtocolEvm(account).swidge(SWIDGE_OPTIONS)).rejects.toThrow(AccountRequiredError)
     })
 
-    test('honours sourceChain override and skips chainId detection', async () => {
-      global.fetch = buildFetchRouter([
-        NETWORKS_HANDLER,
-        {
-          method: 'GET',
-          match: /^\/api\/v2\/transaction_status\?network=arbitrum&transaction_id=0xbb$/,
-          status: 200,
-          body: () => ({ data: { status: 'pending' } })
-        }
-      ])
+    test('throws a DisposalError, without creating a swap, once the account has been disposed', async () => {
+      useSwapHandlers()
+      const requests = recordRequests(server)
 
-      const account = makeAccount()
-      const protocol = new LayerswapProtocolEvm(account)
-      await expect(protocol.getTransactionStatus('0xbb', { sourceChain: 'arbitrum' }))
-        .resolves.toEqual({ status: 'pending' })
+      const account = new WalletAccountEvm(SEED_PHRASE, "0'/0/0", { provider: makeEip1193Provider() })
+      account.dispose()
+
+      await expect(new LayerswapProtocolEvm(account).swidge(SWIDGE_OPTIONS)).rejects.toThrow(DisposalError)
+      expect(requests).toHaveLength(0)
     })
   })
 
-  describe('quoteSwidge', () => {
-    test('maps the Layerswap quote to a WDK swidge quote with itemised fees and gas', async () => {
-      global.fetch = buildFetchRouter([NETWORKS_HANDLER, QUOTE_HANDLER({ avg_completion_time: '00:02:30' })])
+  describe('wallet errors', () => {
+    test('maps insufficient-funds rejections of the node to a SwidgeError (INSUFFICIENT_BALANCE)', async () => {
+      useSwapHandlers()
 
       const account = makeAccount()
-      const protocol = new LayerswapProtocolEvm(account, { apiKey: 'test-key' })
+      account.sendTransaction.mockRejectedValue(makeError('insufficient funds for gas * price + value', 'INSUFFICIENT_FUNDS'))
 
-      const quote = await protocol.quoteSwidge({
-        fromToken: 'USDC',
-        toToken: 'USDC',
-        toChain: 'arbitrum',
-        fromTokenAmount: 100_000_000n,
-        slippage: 0.01
-      })
+      const error = await new LayerswapProtocolEvm(account).swidge(SWIDGE_OPTIONS).catch((err) => err)
 
-      expect(quote.fromTokenAmount).toBe(100_000_000n)
-      expect(quote.toTokenAmount).toBe(99_500_000n)
-      expect(quote.toTokenAmountMin).toBe(99_000_000n)
-      expect(quote.estimatedDuration).toBe(150)
-      expect(quote.fees).toEqual([
-        expect.objectContaining({ type: 'protocol', amount: 400_000n, token: 'USDC', included: true }),
-        expect.objectContaining({ type: 'network', amount: 100_000n, token: 'USDC', included: true }),
-        expect.objectContaining({ type: 'network', amount: 67_890n, token: 'ETH', included: false })
-      ])
+      expect(error).toBeInstanceOf(SwidgeError)
+      expect(error.reason).toBe(SwidgeErrorReason.INSUFFICIENT_BALANCE)
     })
 
-    test('omits the gas fee entry when estimation fails (e.g. unfunded account)', async () => {
-      global.fetch = buildFetchRouter([NETWORKS_HANDLER, QUOTE_HANDLER()])
+    test('surfaces them as a BridgeError through the legacy bridge surface', async () => {
+      useSwapHandlers()
 
       const account = makeAccount()
-      account.quoteSendTransaction.mockRejectedValue(new Error('missing revert data'))
-      const protocol = new LayerswapProtocolEvm(account)
+      account.sendTransaction.mockRejectedValue(makeError('insufficient funds for gas * price + value', 'INSUFFICIENT_FUNDS'))
 
-      const quote = await protocol.quoteSwidge({
-        fromToken: 'ETH',
-        toChain: 'arbitrum',
-        fromTokenAmount: 1_000_000_000_000_000n
-      })
+      const error = await new LayerswapProtocolEvm(account).bridge({ targetChain: 'arbitrum', recipient: USER_ADDRESS, token: USDC_CONTRACT, amount: 100_000_000n }).catch((err) => err)
 
-      expect(quote.fees.every((f) => f.included)).toBe(true)
+      expect(error).toBeInstanceOf(BridgeError)
+      expect(error.reason).toBe(SwidgeErrorReason.INSUFFICIENT_BALANCE)
     })
 
-    test('converts the WDK decimal slippage to a Layerswap percent string', async () => {
-      const fetchMock = buildFetchRouter([NETWORKS_HANDLER, QUOTE_HANDLER()])
-      global.fetch = fetchMock
+    test('wraps other wallet failures in a ProviderError', async () => {
+      useSwapHandlers()
 
       const account = makeAccount()
-      const protocol = new LayerswapProtocolEvm(account)
+      account.quoteSendTransaction.mockRejectedValue(new Error('bundler unavailable'))
 
-      await protocol.quoteSwidge({
-        fromToken: 'USDC',
-        toChain: 'arbitrum',
-        fromTokenAmount: 100_000_000n,
-        slippage: 0.005
-      })
-
-      const quoteCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/api/v2/quote'))
-      expect(String(quoteCall[0])).toContain('slippage=0.5')
-    })
-
-    test('rejects exact-out operations', async () => {
-      global.fetch = buildFetchRouter([NETWORKS_HANDLER])
-
-      const account = makeAccount()
-      const protocol = new LayerswapProtocolEvm(account)
-
-      await expect(protocol.quoteSwidge({
-        fromToken: 'USDC',
-        toChain: 'arbitrum',
-        toTokenAmount: 100_000_000n
-      })).rejects.toThrow('exact-in')
-    })
-
-    test('rejects same-chain swaps (toChain missing)', async () => {
-      global.fetch = buildFetchRouter([NETWORKS_HANDLER])
-
-      const account = makeAccount()
-      const protocol = new LayerswapProtocolEvm(account)
-
-      await expect(protocol.quoteSwidge({
-        fromToken: 'USDC',
-        toToken: 'ETH',
-        fromTokenAmount: 100_000_000n
-      })).rejects.toThrow('same-chain')
-    })
-  })
-
-  describe('swidge', () => {
-    test('creates the swap, sends the deposit, and returns a WDK swidge result', async () => {
-      global.fetch = buildFetchRouter([
-        NETWORKS_HANDLER,
-        CREATE_SWAP_HANDLER({}),
-        SPEEDUP_HANDLER('swap-id-1')
-      ])
-
-      const account = makeAccount()
-      const protocol = new LayerswapProtocolEvm(account, { apiKey: 'test-key' })
-
-      const result = await protocol.swidge({
-        fromToken: USDC_CONTRACT,
-        toToken: 'USDC',
-        toChain: 'arbitrum',
-        recipient: USER_ADDRESS,
-        fromTokenAmount: 100_000_000n
-      })
-
-      expect(result.id).toBe('swap-id-1')
-      expect(result.hash).toBe('dummy-hash')
-      expect(result.fromTokenAmount).toBe(100_000_000n)
-      expect(result.transactions).toEqual([{ hash: 'dummy-hash', chain: 'ethereum', type: 'source' }])
-      expect(result.fees).toEqual([
-        expect.objectContaining({ type: 'protocol', amount: 500_000n, token: 'USDC', included: true }),
-        expect.objectContaining({ type: 'network', amount: 12_345n, token: 'ETH', included: false })
-      ])
-      expect(account.sendTransaction).toHaveBeenCalledWith({
-        to: DEPOSIT_ADDRESS,
-        value: 0n,
-        data: ERC20_CALLDATA
-      })
-    })
-
-    test('defaults the recipient to the account address for same-VM destinations', async () => {
-      const fetchMock = buildFetchRouter([
-        NETWORKS_HANDLER,
-        CREATE_SWAP_HANDLER({}),
-        SPEEDUP_HANDLER('swap-id-1')
-      ])
-      global.fetch = fetchMock
-
-      const account = makeAccount()
-      const protocol = new LayerswapProtocolEvm(account)
-
-      await protocol.swidge({
-        fromToken: 'USDC',
-        toChain: 'arbitrum',
-        fromTokenAmount: 100_000_000n
-      })
-
-      const createCall = fetchMock.mock.calls.find(([, init]) => init && init.method === 'POST' && init.body.includes('destination_address'))
-      expect(JSON.parse(createCall[1].body).destination_address).toBe(USER_ADDRESS)
-    })
-
-    test('enforces maxProtocolFeeBps and does not send', async () => {
-      global.fetch = buildFetchRouter([
-        NETWORKS_HANDLER,
-        CREATE_SWAP_HANDLER({})
-      ])
-
-      const account = makeAccount()
-      const protocol = new LayerswapProtocolEvm(account)
-
-      // total_fee 0.5 on 100 USDC = 50 bps
-      await expect(protocol.swidge({
-        fromToken: 'USDC',
-        toToken: 'USDC',
-        toChain: 'arbitrum',
-        recipient: USER_ADDRESS,
-        fromTokenAmount: 100_000_000n
-      }, { maxProtocolFeeBps: 49 })).rejects.toThrow('maximum protocol fee')
-
-      expect(account.sendTransaction).not.toHaveBeenCalled()
-    })
-
-    test('throws when the quoted minimum output is below minAmountOut', async () => {
-      global.fetch = buildFetchRouter([
-        NETWORKS_HANDLER,
-        CREATE_SWAP_HANDLER({})
-      ])
-
-      const account = makeAccount()
-      const protocol = new LayerswapProtocolEvm(account)
-
-      await expect(protocol.swidge({
-        fromToken: 'USDC',
-        toToken: 'USDC',
-        toChain: 'arbitrum',
-        recipient: USER_ADDRESS,
-        fromTokenAmount: 100_000_000n,
-        minAmountOut: 99_000_000n
-      })).rejects.toThrow('minAmountOut')
-
-      expect(account.sendTransaction).not.toHaveBeenCalled()
-    })
-
-    test('throws for read-only accounts', async () => {
-      // A plain object (no WalletAccountEvm/Erc4337 prototype) represents the read-only
-      // case from the protocol's perspective — the writable duck-type gate rejects it.
-      const account = {
-        _config: { provider: 'https://rpc.example/eth' },
-        getAddress: jest.fn().mockResolvedValue(USER_ADDRESS)
-      }
-      const protocol = new LayerswapProtocolEvm(account)
-
-      await expect(protocol.swidge({
-        fromToken: 'USDC',
-        toChain: 'arbitrum',
-        fromTokenAmount: 100_000_000n
-      })).rejects.toThrow('non read-only account')
-    })
-  })
-
-  describe('getSwidgeStatus', () => {
-    test('maps the Layerswap swap status and transactions to the WDK vocabulary', async () => {
-      global.fetch = buildFetchRouter([{
-        method: 'GET',
-        match: /^\/api\/v2\/swaps\/swap-id-1$/,
-        status: 200,
-        body: () => ({
-          data: {
-            swap: {
-              id: 'swap-id-1',
-              status: 'ls_transfer_pending',
-              transactions: [
-                { transaction_hash: '0xinput', type: 'input', status: 'completed', network: ETHEREUM_NETWORK },
-                { transaction_hash: '0xoutput', type: 'output', status: 'initiated', network: ARBITRUM_NETWORK }
-              ]
-            }
-          }
-        })
-      }])
-
-      const account = makeAccount()
-      const protocol = new LayerswapProtocolEvm(account)
-
-      await expect(protocol.getSwidgeStatus('swap-id-1')).resolves.toEqual({
-        status: 'pending',
-        transactions: [
-          { hash: '0xinput', chain: 'ethereum', type: 'source' },
-          { hash: '0xoutput', chain: 'arbitrum', type: 'destination' }
-        ]
-      })
-    })
-  })
-
-  describe('discovery', () => {
-    test('getSupportedChains maps the network catalog', async () => {
-      global.fetch = buildFetchRouter([NETWORKS_HANDLER])
-
-      const protocol = new LayerswapProtocolEvm(undefined)
-
-      await expect(protocol.getSupportedChains()).resolves.toEqual([
-        { id: 'ethereum', name: 'ethereum', type: 'evm', nativeToken: '' },
-        { id: 'arbitrum', name: 'arbitrum', type: 'evm', nativeToken: '' }
-      ])
-    })
-
-    test('getSupportedTokens flattens and scopes by chain', async () => {
-      global.fetch = buildFetchRouter([NETWORKS_HANDLER])
-
-      const protocol = new LayerswapProtocolEvm(undefined)
-
-      const tokens = await protocol.getSupportedTokens({ toChain: 'arbitrum' })
-      expect(tokens).toHaveLength(2)
-      expect(tokens.every((t) => t.chain === 'arbitrum')).toBe(true)
+      await expect(new LayerswapProtocolEvm(account).swidge(SWIDGE_OPTIONS)).rejects.toThrow(ProviderError)
     })
   })
 })

@@ -1,5 +1,7 @@
 import { describe, expect, jest, test } from '@jest/globals'
 
+import { InvalidTokenError, ValueError } from '@tetherto/wdk-wallet/protocols'
+
 import {
   resolveSourceNetwork,
   resolveNetworkByName,
@@ -59,6 +61,7 @@ describe('resolveSourceNetwork', () => {
 
   test('throws on unknown chain id', async () => {
     const client = makeStubClient([ETHEREUM_NETWORK])
+    await expect(resolveSourceNetwork(client, 999)).rejects.toThrow(ValueError)
     await expect(resolveSourceNetwork(client, 999)).rejects.toThrow(/source chain with id '999'/)
   })
 })
@@ -72,7 +75,8 @@ describe('resolveNetworkByName', () => {
 
   test('throws on unknown network', async () => {
     const client = makeStubClient([ETHEREUM_NETWORK])
-    await expect(resolveNetworkByName(client, 'OPTIMISM_MAINNET')).rejects.toThrow(/destination network/)
+    await expect(resolveNetworkByName(client, 'OPTIMISM_MAINNET')).rejects.toThrow(ValueError)
+    await expect(resolveNetworkByName(client, 'OPTIMISM_MAINNET')).rejects.toThrow(/does not support network 'OPTIMISM_MAINNET'/)
   })
 })
 
@@ -95,10 +99,12 @@ describe('resolveToken', () => {
   })
 
   test('throws on unknown token', () => {
+    expect(() => resolveToken(ETHEREUM_NETWORK, 'DOGE')).toThrow(InvalidTokenError)
     expect(() => resolveToken(ETHEREUM_NETWORK, 'DOGE')).toThrow(/not supported/)
   })
 
   test('throws on network with no tokens', () => {
+    expect(() => resolveToken({ name: 'EMPTY', tokens: [] }, 'USDC')).toThrow(InvalidTokenError)
     expect(() => resolveToken({ name: 'EMPTY', tokens: [] }, 'USDC')).toThrow(/no tokens listed/)
   })
 })

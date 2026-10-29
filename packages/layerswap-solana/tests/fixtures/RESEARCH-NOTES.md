@@ -43,15 +43,15 @@ So:
 2. **The bytes are a legacy `Transaction` wire format** (the v0 / unversioned Solana transaction format that `@solana/web3.js` exposes as `Transaction.from(buffer)`). It is **not** a `VersionedTransaction` — the UI uses the legacy class exclusively.
 3. **The recovered `Transaction` is sent as-is.** The UI does not rebuild instructions; it signs the recovered tx and broadcasts via `Connection.sendRawTransaction`. Layerswap embeds whatever instructions / memos they need (probably a memo with the swap reference) inside that tx.
 
-**Implication for this package:** we need to take Layerswap's wire-format legacy Transaction, attach the wallet's signature, and broadcast it. The newer `@tetherto/wdk-wallet-solana` uses the modular v3 `@solana/*` SDK and its `sendTransaction(message)` expects a v3 `TransactionMessage`, not a legacy wire-format Transaction — so the protocol cannot just hand the deserialised tx to `account.sendTransaction(tx)` and call it a day.
+**Implication for this package:** we need to take Layerswap's wire-format legacy Transaction, attach the wallet's signature, and broadcast it.
 
-We solve this by pulling in `@solana/web3.js` (legacy SDK) as a runtime dep of this package and going through the same path as the UI:
-- `Transaction.from(Buffer.from(callData, 'base64'))` for deserialisation
-- Build a `Connection` from `account._config.provider` (or `rpcUrl`)
-- Sign with `Keypair.fromSecretKey(...)` constructed from `account.keyPair.privateKey + publicKey` (the v3 wallet exposes the raw 32-byte private + public keys via the `keyPair` getter)
-- Broadcast via `Connection.sendRawTransaction(transaction.serialize())`
+`@tetherto/wdk-wallet-solana` (`1.0.0-beta.20`) accepts a base64-encoded serialized transaction directly in `quoteSendTransaction(tx)` / `sendTransaction(tx)`, so the protocol hands Layerswap's `call_data` to the wallet as-is:
+- `_prepareDeposit` validates that `call_data` is non-empty base64, then quotes it with `account.quoteSendTransaction(callData)`
+- `_sendDeposit` signs and broadcasts it with `account.sendTransaction(callData)`
 
-This keeps the wallet account responsible for key management (`account.keyPair`, `account.getAddress()`) and delegates Layerswap-specific wire-format handling to `@solana/web3.js`, exactly matching the UI's tested code path.
+The wallet account stays responsible for key management, the rpc client and broadcasting — including every provider shape it supports (rpc url, rpc client, fail-over list). No Solana SDK is used at runtime; source-cluster detection reuses the wallet's own rpc client (`account._rpc`), never one rebuilt from `account._config.provider`. (`@solana/web3.js` remains a test-only dependency, used to build fixture transactions.)
+
+> Superseded design (kept for history): an earlier version deserialised `call_data` with `@solana/web3.js`'s `Transaction.from`, built a `Connection` from `account._config.provider`, signed with a `Keypair` from `account.keyPair`, and broadcast via `Connection.sendRawTransaction`. It was replaced because it ignored the wallet's provider shapes and duplicated wallet functionality.
 
 ## `to_address` and amount fields (assumed; confirm on first live swap)
 
@@ -70,7 +70,7 @@ When making the first live Solana → EVM swap:
 
 ## Files
 
-- `networks.json` — `GET /networks` slice for SOLANA_MAINNET + ARBITRUM_MAINNET. Used by unit tests as the canonical network catalog.
-- `quote.spl.json` — live quote envelope for SOLANA_MAINNET USDC → ARBITRUM_MAINNET USDC. Used by `quoteBridge` unit tests.
+- `networks.json` — `GET /networks` slice for SOLANA_MAINNET + ARBITRUM_MAINNET, captured for reference (not loaded by the unit tests).
+- `quote.spl.json` — live quote envelope for SOLANA_MAINNET USDC → ARBITRUM_MAINNET USDC, captured for reference (not loaded by the unit tests).
 - `createSwap.native.json` (TODO) — to be populated after first live swap with native SOL source.
 - `createSwap.spl.json` (TODO) — to be populated after first live swap with SPL token source.

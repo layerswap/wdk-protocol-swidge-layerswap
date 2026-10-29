@@ -1,5 +1,7 @@
 import { describe, expect, test } from '@jest/globals'
 
+import { MaximumFeeExceededError, NoSuchElementError, ProviderError, SwidgeError, ValueError } from '@tetherto/wdk-wallet/protocols'
+
 import {
   mapSwapStatus,
   mapSwapTransactions,
@@ -11,7 +13,8 @@ import {
   buildSwidgeQuote,
   parseCompletionTime,
   formatSlippage,
-  assertFeeGuards
+  assertFeeGuards,
+  normalizeWalletError
 } from '../index.js'
 
 const USDC_ETH = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
@@ -172,8 +175,33 @@ describe('buildStatusResult', () => {
     })
   })
 
-  test('throws when the swap is missing', () => {
+  test('throws a ProviderError when the swap is missing', () => {
+    expect(() => buildStatusResult({})).toThrow(ProviderError)
     expect(() => buildStatusResult({})).toThrow('missing swap details')
+  })
+
+  describe('chain hints', () => {
+    const response = {
+      swap: {
+        id: 'swap-1',
+        status: 'ls_transfer_pending',
+        source_network: { name: 'ETHEREUM_MAINNET', chain_id: '1' },
+        destination_network: { name: 'ARBITRUM_MAINNET', chain_id: '42161' }
+      }
+    }
+
+    test('accepts hints matching the network name (case-insensitive) or chain id', () => {
+      expect(buildStatusResult(response, { fromChain: 'ethereum_mainnet', toChain: 'ARBITRUM_MAINNET' }).status).toBe('pending')
+      expect(buildStatusResult(response, { fromChain: 1, toChain: '42161' }).status).toBe('pending')
+    })
+
+    test('throws a NoSuchElementError when fromChain does not match the swap source', () => {
+      expect(() => buildStatusResult(response, { fromChain: 'BASE_MAINNET' })).toThrow(NoSuchElementError)
+    })
+
+    test('throws a NoSuchElementError when toChain does not match the swap destination', () => {
+      expect(() => buildStatusResult(response, { toChain: 'ETHEREUM_MAINNET' })).toThrow(NoSuchElementError)
+    })
   })
 })
 
@@ -299,6 +327,7 @@ describe('formatSlippage', () => {
   })
 
   test('rejects negative and non-finite values', () => {
+    expect(() => formatSlippage(-0.01)).toThrow(ValueError)
     expect(() => formatSlippage(-0.01)).toThrow('Invalid slippage')
     expect(() => formatSlippage(Number.NaN)).toThrow('Invalid slippage')
   })
@@ -320,10 +349,14 @@ describe('assertFeeGuards', () => {
 
   test('throws when the protocol fee exceeds the cap', () => {
     expect(() => assertFeeGuards(fees, 100000000n, 'USDC', { maxProtocolFeeBps: 59 }))
+      .toThrow(MaximumFeeExceededError)
+    expect(() => assertFeeGuards(fees, 100000000n, 'USDC', { maxProtocolFeeBps: 59 }))
       .toThrow('Exceeded maximum protocol fee')
   })
 
   test('throws when the network fee exceeds the cap, ignoring other-unit fees', () => {
+    expect(() => assertFeeGuards(fees, 100000000n, 'USDC', { maxNetworkFeeBps: 89n }))
+      .toThrow(MaximumFeeExceededError)
     expect(() => assertFeeGuards(fees, 100000000n, 'USDC', { maxNetworkFeeBps: 89n }))
       .toThrow('Exceeded maximum network fee')
   })
@@ -331,5 +364,37 @@ describe('assertFeeGuards', () => {
   test('is a no-op without configured caps', () => {
     expect(() => assertFeeGuards(fees, 100000000n, 'USDC')).not.toThrow()
     expect(() => assertFeeGuards(fees, 0n, 'USDC', { maxProtocolFeeBps: 1 })).not.toThrow()
+  })
+
+  test('throws a ValueError for a non-integer cap', () => {
+    expect(() => assertFeeGuards(fees, 100000000n, 'USDC', { maxProtocolFeeBps: 0.5 })).toThrow(ValueError)
+  })
+})
+
+describe('normalizeWalletError', () => {
+  test('returns errors that are part of the swidge contract as-is (matched by name)', () => {
+    const error = new ValueError('bad')
+    expect(normalizeWalletError(error)).toBe(error)
+
+    const foreign = Object.assign(new Error('fee'), { name: 'MaximumFeeExceededError' })
+    expect(normalizeWalletError(foreign)).toBe(foreign)
+  })
+
+  test('maps insufficient-balance transaction errors to a SwidgeError with the same reason', () => {
+    const error = Object.assign(new Error('no funds'), { name: 'TransactionError', reason: 'INSUFFICIENT_BALANCE' })
+    const normalized = normalizeWalletError(error)
+
+    expect(normalized).toBeInstanceOf(SwidgeError)
+    expect(normalized.reason).toBe('INSUFFICIENT_BALANCE')
+    expect(normalized.cause).toBe(error)
+  })
+
+  test('wraps unknown errors in a ProviderError', () => {
+    const error = new Error('rpc exploded')
+    const normalized = normalizeWalletError(error)
+
+    expect(normalized).toBeInstanceOf(ProviderError)
+    expect(normalized.message).toMatch(/rpc exploded/)
+    expect(normalized.cause).toBe(error)
   })
 })

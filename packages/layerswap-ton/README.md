@@ -1,15 +1,16 @@
 # @layerswap/wdk-protocol-swidge-layerswap-ton
 
-WDK module that lets `@tetherto/wdk-wallet-ton` accounts swap and bridge tokens across chains via the Layerswap public API. Implements `SwidgeProtocol` from `@tetherto/wdk-wallet/protocols` (`quoteSwidge` / `swidge` / `getSwidgeStatus` / `getSupportedChains` / `getSupportedTokens`).
+WDK module that lets `@tetherto/wdk-wallet-ton` accounts swap and bridge tokens across chains via the Layerswap public API, using the `ISwidgeProtocol` interface from `@tetherto/wdk-wallet/protocols`.
 
-Sibling of `@layerswap/wdk-protocol-swidge-layerswap-evm`, `@layerswap/wdk-protocol-swidge-layerswap-solana` and `@layerswap/wdk-protocol-swidge-layerswap-tron`. Shares HTTP/network/decimal plumbing via `@layerswap/wdk-protocol-swidge-layerswap-core`.
+`LayerswapProtocolTon` is a thin subclass of `LayerswapSwidgeProtocol` from [`@layerswap/wdk-protocol-swidge-layerswap-core`](../layerswap-core): the whole swidge flow (`quoteSwidge` / `swidge` / `getSwidgeStatus` / `getSupportedChains` / `getSupportedTokens` / `getTransactionStatus`, the legacy `bridge` / `quoteBridge` adapters, the fee guards, the types and the error contract) lives there and is shared with the evm, solana and bitcoin packages. This package only implements what is specific to TON: the default source network, the gas approximations and the deposit message. See the core README for the shared API reference.
 
 ## Install
 
 ```bash
-npm install @layerswap/wdk-protocol-swidge-layerswap-ton \
-            @tetherto/wdk-wallet @tetherto/wdk-wallet-ton
+npm install @layerswap/wdk-protocol-swidge-layerswap-ton
 ```
+
+`@tetherto/wdk-wallet` (`1.0.0-beta.25`), `@tetherto/wdk-wallet-ton` (`1.0.0-beta.17`) and `@ton/ton` (`16.2.4`) are regular dependencies of this package, pinned to exact versions: the WDK is still in pre-release, and new beta versions may include breaking changes. Build your accounts with the same `@tetherto/wdk-wallet-ton` version to avoid duplicate copies of `@ton/core` (whose `Cell` objects are checked with `instanceof`).
 
 ## Quick example
 
@@ -47,8 +48,9 @@ const result = await swidge.swidge({
 })
 console.log(result.id, result.hash) // Layerswap swap id + TON external-message hash
 
-// 3. Track the destination payout (completes asynchronously).
-const { status, transactions } = await swidge.getSwidgeStatus(result.id)
+// 3. Track the destination payout (completes asynchronously). The optional chain hints
+//    constrain the lookup: a swap on other chains is reported as not found.
+const { status, transactions } = await swidge.getSwidgeStatus(result.id, { fromChain: 'TON_MAINNET' })
 ```
 
 Chain/token discovery works without an account:
@@ -59,32 +61,32 @@ const chains = await discovery.getSupportedChains()          // ids are Layerswa
 const tokens = await discovery.getSupportedTokens({ toChain: 'TON_MAINNET' })
 ```
 
-## Legacy bridge surface
+## Public API
 
-The pre-swidge `bridge()` / `quoteBridge()` methods of this package are kept as thin adapters over `swidge()` / `quoteSwidge()`:
+The entry point re-exports `@layerswap/wdk-protocol-swidge-layerswap-core/protocol` — every shared type (`LayerswapProtocolConfig`, `LayerswapSwidgeOptions`, `LayerswapBridgeOptions`, `LayerswapBridgeResult`, `GetTransactionStatusOptions`, the WDK swidge types, …), `LayerswapApiClient` (returned by `getApiClient()`), `LayerswapSwidgeProtocol` and the WDK error classes the methods throw — plus the `@tetherto/wdk-wallet-ton` account types:
 
 ```js
-const { hash, fee, bridgeFee, swapId } = await swidge.bridge({
-  targetChain: 'ARBITRUM_MAINNET',
-  recipient: '0xa460AEbce0d3A4BecAd8ccf9D6D4861296c503Bd',
-  token: 'USDT',
-  amount: 10_000_000n,
-  slippage: '0.5'                // legacy: percent string, not a decimal
-})
+import LayerswapTon, { SwidgeError, SwidgeErrorReason, BridgeError, MaximumFeeExceededError } from '@layerswap/wdk-protocol-swidge-layerswap-ton'
 ```
 
-`hash` is the deposit-message hash, `swapId` the Layerswap swap id, `fee` the source-chain gas (nanotons) and `bridgeFee` the total Layerswap fee (source-token base units).
+The shared error contract is documented in the core README. TON-specific error mapping:
+
+| Error | Thrown when |
+|---|---|
+| `ProviderRequiredError` | The wallet account is not connected to ton center. |
+| `MaximumFeeExceededError` | The deposit message exceeds the account's `transactionMaxFee` (besides the shared `bridgeMaxFee` / bps guards). |
+| `ProviderError` | Layerswap returns a deposit action without `to_address` or with a malformed TON address, or ton center fails (e.g. resolving the jetton wallet). |
+| `DisposalError` | The account reports `disposed`, or its private key has been erased by `WalletAccountTon.dispose()` (`keyPair.privateKey === null`). |
+
+`@tetherto/wdk-wallet-ton` throws plain `Error`s, so the "not connected to ton center" and "exceeded maximum fee" failures are mapped by message; any other wallet failure becomes a `ProviderError`.
 
 ## Semantic notes
 
-- Fee entries are itemised (`SwidgeFee[]`): Layerswap's 'protocol' and destination 'network' fees are deducted from the source amount, denominated in the **source token**, and flagged `included: true`. The source-chain gas is a separate non-included 'network' fee in **nanotons**. Never sum amounts across entries with different `token`s.
-- `quoteSwidge` reports the gas as an approximation (~0.01 TON native, ~0.05 TON jetton — the wallet only reports the actual gas after broadcasting); `swidge` reports the actual gas from `sendTransaction`. For the same reason, the `maxNetworkFeeBps`/`maxProtocolFeeBps` guards are enforced before broadcasting against the included Layerswap fees.
-- Layerswap only supports **exact-in** operations: pass `fromTokenAmount`; `toTokenAmount` throws.
-- `toChain` is required — Layerswap does not support same-chain swaps.
-- `recipient` defaults to the account's own address only when source and destination chains share the same address format (both `type: 'ton'`); otherwise it is required.
-- The source network defaults to `TON_MAINNET` — at the time of writing Layerswap only lists TON mainnet, and TON doesn't expose a stable network id the way EVM `chainId` does. Pass `fromChain: 'TON_<...>'` (or legacy `sourceChain`) to override if Layerswap adds testnet support.
-- Layerswap's `deposit_actions[].call_data` for TON is a JSON string `{"comment": "...", "amount": "..."}` containing a reference comment and the jetton amount in base units. The package mirrors the Layerswap web app's `TonWalletWithdraw` flow:
-  - **Native TON** — build a cell with the comment as `storeStringTail`, send to the deposit address with the full TON value.
+- The source-chain gas entry is a non-included 'network' fee in **nanotons**. `quoteSwidge` reports it as an approximation (~0.01 TON native, ~0.05 TON jetton — the wallet only reports the actual gas after broadcasting); `swidge` reports the actual gas returned by `sendTransaction`. For the same reason, the `maxNetworkFeeBps`/`maxProtocolFeeBps` guards are enforced before broadcasting against the included Layerswap fees only.
+- The source network is detected from the zero-state block of the ton center the wallet account is connected to (`TON_MAINNET` or `TON_TESTNET`); without an account it defaults to `TON_MAINNET`. A `fromChain` (legacy `sourceChain`) must match the detected network.
+- `result.hash` is the wallet's body hash of the deposit message. `getTransactionStatus(result.hash)` traces it through ton center to the message Layerswap tracks (the jetton `transfer_notification`, or the native transfer).
+- Layerswap's `deposit_actions[].call_data` for TON is a JSON string `{"comment": "...", "amount": "..."}` containing a reference comment and the amount in base units; without them nothing is sent (`ProviderError`). The package mirrors the Layerswap web app's `TonWalletWithdraw` flow:
+  - **Native TON** — build a cell with the comment as `storeStringTail`, send it to the deposit address with the `call_data` amount.
   - **Jetton** — resolve the source's jetton wallet address via the jetton master contract, build a jetton-transfer body (opcode `0x0f8a7ea5`) with the comment in the forward payload, send to the jetton wallet with a ~0.045 TON gas budget.
 
 ## Development

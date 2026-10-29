@@ -66,12 +66,13 @@ export type LayerswapSwap = {
     fail_reason?: string | null;
     transactions?: LayerswapSwapTransaction[];
 };
+export type LayerswapQuoteResponse = {
+    quote: LayerswapQuote;
+};
 export type LayerswapSwapResponse = {
     swap: LayerswapSwap;
     deposit_actions?: LayerswapDepositAction[];
-    quote?: {
-        quote: LayerswapQuote;
-    };
+    quote?: LayerswapQuoteResponse;
 };
 export type LayerswapCreateSwapParams = {
     source_network: string;
@@ -101,6 +102,53 @@ export type LayerswapGetQuoteParams = {
 export type LayerswapTransactionStatusValue = 'completed' | 'failed' | 'pending';
 export type LayerswapTransactionStatus = {
     status: LayerswapTransactionStatusValue;
+};
+export type LayerswapApiErrorBody = {
+    /**
+     * - Layerswap's error code (e.g. `'NOT_FOUND'`).
+     */
+    code?: string;
+    /**
+     * - Layerswap's error message.
+     */
+    message?: string;
+};
+export type LayerswapApiEnvelope = {
+    /**
+     * - The response payload.
+     */
+    data?: any;
+    /**
+     * - The error details of a failed request.
+     */
+    error?: LayerswapApiErrorBody;
+};
+export type LayerswapApiError = Error & LayerswapApiErrorDetails;
+export type LayerswapApiErrorDetails = {
+    /**
+     * - Layerswap's error code, or `HTTP_<status>` when absent.
+     */
+    code: string;
+    /**
+     * - The HTTP status of the response.
+     */
+    status: number;
+};
+export type LayerswapRequestOptions = {
+    /**
+     * - The JSON request body.
+     */
+    body?: Object;
+    /**
+     * - Extra request headers.
+     */
+    headers?: Record<string, string>;
+    /**
+     * - If true, a "not found" response (a 404, or a
+     * 400 whose message reports the resource as not found) is thrown as a `NoSuchElementError`
+     * instead of a `ValueError`.
+     */
+    notFoundAsNoSuchElement?: boolean;
 };
 export type LayerswapApiClientConfig = {
     apiKey?: string;
@@ -190,10 +238,14 @@ export type LayerswapApiClientConfig = {
  * @property {LayerswapSwapTransaction[]} [transactions]
  */
 /**
+ * @typedef {Object} LayerswapQuoteResponse
+ * @property {LayerswapQuote} quote
+ */
+/**
  * @typedef {Object} LayerswapSwapResponse
  * @property {LayerswapSwap} swap
  * @property {LayerswapDepositAction[]} [deposit_actions]
- * @property {{ quote: LayerswapQuote }} [quote]
+ * @property {LayerswapQuoteResponse} [quote]
  */
 /**
  * @typedef {Object} LayerswapCreateSwapParams
@@ -235,6 +287,37 @@ export type LayerswapApiClientConfig = {
  * @property {LayerswapTransactionStatusValue} status
  */
 /**
+ * @typedef {Object} LayerswapApiErrorBody
+ * @property {string} [code] - Layerswap's error code (e.g. `'NOT_FOUND'`).
+ * @property {string} [message] - Layerswap's error message.
+ */
+/**
+ * The JSON envelope wrapping every Layerswap v2 API response.
+ *
+ * @typedef {Object} LayerswapApiEnvelope
+ * @property {any} [data] - The response payload.
+ * @property {LayerswapApiErrorBody} [error] - The error details of a failed request.
+ */
+/**
+ * A WDK error raised for a failed Layerswap request, decorated with Layerswap's error
+ * code and the HTTP status.
+ *
+ * @typedef {Error & LayerswapApiErrorDetails} LayerswapApiError
+ */
+/**
+ * @typedef {Object} LayerswapApiErrorDetails
+ * @property {string} code - Layerswap's error code, or `HTTP_<status>` when absent.
+ * @property {number} status - The HTTP status of the response.
+ */
+/**
+ * @typedef {Object} LayerswapRequestOptions
+ * @property {Object} [body] - The JSON request body.
+ * @property {Record<string, string>} [headers] - Extra request headers.
+ * @property {boolean} [notFoundAsNoSuchElement] - If true, a "not found" response (a 404, or a
+ *   400 whose message reports the resource as not found) is thrown as a `NoSuchElementError`
+ *   instead of a `ValueError`.
+ */
+/**
  * @typedef {Object} LayerswapApiClientConfig
  * @property {string} [apiKey]
  * @property {string} [apiUrl]
@@ -250,6 +333,13 @@ export type LayerswapApiClientConfig = {
  * - `GET  /api/v2/swaps/{id}`
  * - `POST /api/v2/swaps/{id}/deposit_speedup`
  * - `GET  /api/v2/transaction_status`
+ *
+ * Failed requests are thrown as WDK errors, carrying Layerswap's error `code` and the
+ * HTTP `status` as extra properties:
+ * - `ProviderError` when the API is unreachable, times out, rejects the credentials,
+ *   fails server-side, or returns a malformed body;
+ * - `NoSuchElementError` when a looked-up swap or transaction does not exist;
+ * - `ValueError` when Layerswap rejects the request parameters (other 4xx responses).
  */
 export default class LayerswapApiClient {
     /**
@@ -276,22 +366,25 @@ export default class LayerswapApiClient {
      * Returns the Layerswap network/token catalog. Cached for the lifetime of this client.
      *
      * @returns {Promise<LayerswapNetwork[]>}
+     * @throws {ProviderError} If the request fails.
      */
     getNetworks(): Promise<LayerswapNetwork[]>;
     /**
      * Fetches a fee/receive quote for a prospective swap.
      *
      * @param {LayerswapGetQuoteParams} params
-     * @returns {Promise<{ quote: LayerswapQuote }>}
+     * @returns {Promise<LayerswapQuoteResponse>}
+     * @throws {ValueError} If Layerswap rejects the quote parameters.
+     * @throws {ProviderError} If the request fails.
      */
-    getQuote(params: LayerswapGetQuoteParams): Promise<{
-        quote: LayerswapQuote;
-    }>;
+    getQuote(params: LayerswapGetQuoteParams): Promise<LayerswapQuoteResponse>;
     /**
      * Creates a new swap. Returns the swap id, the deposit actions, and the locked-in quote.
      *
      * @param {LayerswapCreateSwapParams} params
      * @returns {Promise<LayerswapSwapResponse>}
+     * @throws {ValueError} If Layerswap rejects the swap parameters.
+     * @throws {ProviderError} If the request fails.
      */
     createSwap(params: LayerswapCreateSwapParams): Promise<LayerswapSwapResponse>;
     /**
@@ -299,6 +392,9 @@ export default class LayerswapApiClient {
      *
      * @param {string} swapId
      * @returns {Promise<LayerswapSwapResponse>}
+     * @throws {NoSuchElementError} If no swap exists with the given id.
+     * @throws {ValueError} If Layerswap rejects the swap id.
+     * @throws {ProviderError} If the request fails.
      */
     getSwap(swapId: string): Promise<LayerswapSwapResponse>;
     /**
@@ -307,15 +403,19 @@ export default class LayerswapApiClient {
      * but the tx might still revert or be dropped from the mempool — Layerswap will surface
      * `'failed'` here even before the swap as a whole reaches a terminal status.
      *
-     * Throws if Layerswap cannot find the transaction (e.g. before it's been indexed, or
-     * if the network/transaction_id pair is wrong). The protocol-level wrapper calls this
-     * once per poll; callers should treat `NOT_FOUND` as "not yet indexed, retry later".
+     * Throws a `NoSuchElementError` if Layerswap cannot find the transaction (e.g. before
+     * it's been indexed, or if the network/transaction_id pair is wrong). The protocol-level
+     * wrapper calls this once per poll; callers should treat `NoSuchElementError` as
+     * "not yet indexed, retry later".
      *
      * @param {string} networkName  Layerswap network name (e.g. `'ETHEREUM_MAINNET'`,
      *                              `'TRON_MAINNET'`, `'BITCOIN_MAINNET'`).
      * @param {string} transactionId The on-chain transaction hash / id, in the source chain's
      *                              native format.
      * @returns {Promise<LayerswapTransactionStatus>}
+     * @throws {NoSuchElementError} If Layerswap cannot find the transaction.
+     * @throws {ValueError} If Layerswap rejects the network/transaction id pair.
+     * @throws {ProviderError} If the request fails.
      */
     getTransactionStatus(networkName: string, transactionId: string): Promise<LayerswapTransactionStatus>;
     /**
@@ -324,17 +424,34 @@ export default class LayerswapApiClient {
      * @param {string} swapId
      * @param {string} transactionId
      * @returns {Promise<void>}
+     * @throws {NoSuchElementError} If no swap exists with the given id.
+     * @throws {ValueError} If Layerswap rejects the transaction id.
+     * @throws {ProviderError} If the request fails.
      */
     speedUpDeposit(swapId: string, transactionId: string): Promise<void>;
     /**
      * @private
      * @param {string} method
      * @param {string} path
-     * @param {Object} [body]
-     * @param {Object} [extraHeaders]
+     * @param {LayerswapRequestOptions} [options]
      * @returns {Promise<any>}
+     * @throws {NoSuchElementError} If `options.notFoundAsNoSuchElement` is set and Layerswap responds 404.
+     * @throws {ValueError} If Layerswap rejects the request (4xx).
+     * @throws {ProviderError} If the request fails, times out or returns a malformed body.
      */
     private _request;
+    /**
+     * Maps a failed Layerswap response to the matching WDK error, decorated with
+     * Layerswap's error `code` and the HTTP `status`.
+     *
+     * @private
+     * @param {string} message
+     * @param {string} code
+     * @param {number} status
+     * @param {boolean} notFoundAsNoSuchElement
+     * @returns {LayerswapApiError}
+     */
+    private _buildResponseError;
     /**
      * @private
      * @param {Record<string, unknown>} params

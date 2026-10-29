@@ -29,7 +29,7 @@ Each package lets WDK wallet accounts of a specific source-VM family drive a Lay
 | --- | --- |
 | [`@layerswap/wdk-swidge-layerswap-test-app`](./apps/test-app) | CLI for end-to-end smoke tests against a real Layerswap endpoint. Consumes the protocol via `workspace:*`. |
 
-All packages implement `SwidgeProtocol` from `@tetherto/wdk-wallet/protocols` (>= 1.0.0-beta.17). The chain catalog inside each package is dynamic — fetched from `GET /api/v2/networks` and cached per `LayerswapApiClient` instance — so new Layerswap-supported chains within a VM family are picked up without code changes; `getSupportedChains()`/`getSupportedTokens()` expose it in the WDK vocabulary.
+All packages implement `SwidgeProtocol` from `@tetherto/wdk-wallet/protocols` (exact-pinned, currently `1.0.0-beta.25`). The chain catalog inside each package is dynamic — fetched from `GET /api/v2/networks` and cached per `LayerswapApiClient` instance — so new Layerswap-supported chains within a VM family are picked up without code changes; `getSupportedChains()`/`getSupportedTokens()` expose it in the WDK vocabulary.
 
 ## Installation and usage
 
@@ -44,8 +44,10 @@ For example, an EVM source integration starts with:
 
 ```bash
 npm install @layerswap/wdk-protocol-swidge-layerswap-evm \
-            @tetherto/wdk-wallet @tetherto/wdk-wallet-evm
+            @tetherto/wdk-wallet-evm@1.0.0-beta.24
 ```
+
+Each protocol package depends on exact WDK versions (`@tetherto/wdk-wallet@1.0.0-beta.25` and the matching wallet package); install the same wallet version in your app so accounts and protocols share it.
 
 ```js
 import WalletManagerEvm from '@tetherto/wdk-wallet-evm'

@@ -1,17 +1,23 @@
 # Agent Guide — layerswap-bitcoin
 
-Sibling of `layerswap-evm`, `layerswap-solana`, `layerswap-tron`, and `layerswap-ton` for the Bitcoin source VM. Extends `SwidgeProtocol` (from `@tetherto/wdk-wallet/protocols`, >= 1.0.0-beta.17) for `@tetherto/wdk-wallet-btc` accounts, with the legacy `bridge`/`quoteBridge` surface kept as thin adapters over `swidge`.
+Bitcoin source-VM package. `LayerswapProtocolBitcoin` is a **thin subclass** of `LayerswapSwidgeProtocol` from `@layerswap/wdk-protocol-swidge-layerswap-core`, which holds all chain-agnostic swidge logic (quote/swidge flow, fee guards, `getSwidgeStatus`, discovery, legacy `bridge`/`quoteBridge` adapters, error contract) and the shared types. This package only implements the Bitcoin hooks — never re-implement shared logic or re-declare shared types here.
 
 ## Project Overview
 
-- **Architecture:** Single `LayerswapProtocolBitcoin` class. The chain-agnostic HTTP client and helpers live in `@layerswap/wdk-protocol-swidge-layerswap-core` — do not duplicate them here.
+- **Architecture:** `LayerswapProtocolBitcoin extends LayerswapSwidgeProtocol<LayerswapBitcoinSwidgeOptions, LayerswapSwidgeConfig, LayerswapBitcoinBridgeOptions>`. Implemented hooks:
+  - `_detectSourceNetwork()` — maps `account._config.network` to the Layerswap network (resolved through the network catalog);
+  - `_isWritableAccount(account)` / `_isDisposedAccount(account)`;
+  - `_assertSwidgeRoute(route)` — only native BTC can be deposited (`InvalidTokenError`, before any swap is created);
+  - `_quoteSourceGas()` — the 1500-sat quote approximation;
+  - `_prepareDeposit(context)` / `_sendDeposit(deposit)` — build + sign the PSBT, then broadcast it via `account._client`;
+  - `_toSwidgeOptions(options)` — forwards the legacy `feeRate` bridge option.
 - **Runtime:** Node.js and Bare. No browser-only globals; HTTP via `fetch`.
 
 ## Key Files
 
-- `index.js` — public entry: default export of `LayerswapProtocolBitcoin` plus its config/options/result typedefs.
+- `index.js` — public entry: default export of `LayerswapProtocolBitcoin`, the Bitcoin-specific typedefs (`LayerswapBitcoinProtocolConfig`, `LayerswapSpecificBitcoinProtocolConfig`, `LayerswapSpecificBitcoinOptions`, `LayerswapBitcoinSwidgeOptions`, `LayerswapBitcoinBridgeOptions`, `WalletAccountBtc`, `WalletAccountReadOnlyBtc`), and `export * from '@layerswap/wdk-protocol-swidge-layerswap-core/protocol'` for the shared public API (WDK/core types, `LayerswapApiClient`, `LayerswapSwidgeProtocol`, WDK error classes).
 - `bare.js` — Bare runtime wrapper.
-- `src/layerswap-protocol-bitcoin.js` — `SwidgeProtocol` implementation.
+- `src/layerswap-protocol-bitcoin.js` — the Bitcoin hooks.
 - `tests/fixtures/RESEARCH-NOTES.md` — records what was verified live against Layerswap vs assumed from the Layerswap UI source code.
 - `types/` — generated; do not edit by hand.
 
@@ -22,7 +28,7 @@ Sibling of `layerswap-evm`, `layerswap-solana`, `layerswap-tron`, and `layerswap
 We therefore mirror the wallet's internal flow but inject the `OP_RETURN` output between the deposit and the change:
 
 1. `account._client.listUnspent(address)` — UTXO set (Electrum/Blockbook).
-2. `account._client.estimateFee(1)` — feeRate.
+2. `account._client.estimateFee(confirmationTarget)` — feeRate (`config.confirmationTarget`, default 1), unless the `feeRate` option overrides it.
 3. `@bitcoinerlab/coinselect` — pick UTXOs covering `amount + fee + opReturnOverhead`.
 4. Build PSBT with bitcoinjs-lib:
    - Inputs: `witnessUtxo` (BIP-84) or `nonWitnessUtxo` (BIP-44), with `bip32Derivation` so `signInputHD` walks the right path.
@@ -33,27 +39,42 @@ We therefore mirror the wallet's internal flow but inject the `OP_RETURN` output
 6. `psbt.finalizeAllInputs(); psbt.extractTransaction()`.
 7. `account._client.broadcast(tx.toHex())`.
 
-The protocol reaches into several wallet internals (`_client`, `_masterNode`, `_account`, `_network`, `_dustLimit`, `_path`, `_bip`, `_ensureConnected`, `_toBigInt`). These are protected (`_` prefix) but exposed for subclass / sibling use — same access pattern as Solana's `account._config.provider` and Tron's `account._tronWeb`.
+The protocol reaches into several wallet internals (`_client`, `_masterNode`, `_account`, `_network`, `_dustLimit`, `_path`, `_bip`, `_ensureConnected`, `_toBigInt`), verified against `@tetherto/wdk-wallet-btc@1.0.0-beta.17`. These are protected (`_` prefix) but exposed for subclass / sibling use. Re-check them whenever the wallet-btc pin is bumped.
 
 ## Source network
 
-Layerswap currently only lists `BITCOIN_MAINNET` in the public catalog. The wallet's `config.network` is one of `bitcoin` / `regtest` / `testnet`; the protocol maps these to `BITCOIN_MAINNET`, `BITCOIN_REGTEST`, `BITCOIN_TESTNET` respectively. Mainnet is the only one that resolves today; the others are reserved.
+Layerswap currently only lists `BITCOIN_MAINNET` in the public catalog. The wallet's `config.network` is one of `bitcoin` / `regtest` / `testnet`; the protocol maps these to `BITCOIN_MAINNET`, `BITCOIN_REGTEST`, `BITCOIN_TESTNET` respectively and resolves them through the catalog, so the testnet mappings throw a `ValueError` until Layerswap lists them.
 
-Users can override the mapping by passing `fromChain` explicitly (legacy: `sourceChain`).
+A `fromChain` (legacy: `sourceChain`) must match the account's network; a mismatch throws a `ValueError`.
+
+The deposit amount is the decimal `amount` of the Layerswap deposit action (like the web app): Layerswap reports `amount_in_base_units` as `0` for Bitcoin. A missing `call_data` throws a `ProviderError` — without its OP_RETURN reference the deposit cannot be matched to the swap.
+
+## Error contract
+
+The `ISwidgeProtocol` throw contract is implemented once in core. Bitcoin-specific mappings in the hooks:
+
+- dust-limit amount → `ValueError`; non-native source token → `InvalidTokenError`;
+- no / insufficient UTXOs (incl. after the OP_RETURN overhead) → `SwidgeError` `INSUFFICIENT_BALANCE` (→ `BridgeError` through `bridge`);
+- missing `to_address`, malformed or oversized `call_data` memo → `ProviderError` (`INTERNAL_SERVER_ERROR`);
+- bitcoin client failures (`_ensureConnected`, `estimateFee`, `listUnspent`, `getTransaction`, `broadcast`) go through core's `_callWallet` / `normalizeWalletError` → `ProviderError`;
+- `WalletAccountBtc.dispose()` sets `_masterNode` to `undefined` while keeping `_account`, so a full account without a master node is treated as disposed (`DisposalError`); read-only accounts (no `_account`) → `AccountRequiredError`.
 
 ## `call_data` encoding (matches Layerswap UI)
 
 Layerswap returns the swap reference id as a numeric string in `call_data`. The Layerswap web app converts it with `Number(callData).toString(16)` and stores the resulting hex string as the `OP_RETURN` payload bytes (`Buffer.from(hex, 'hex')`). We mirror that exactly. Bitcoin OP_RETURN payloads are capped at 80 bytes — we throw if `call_data` would overflow.
 
-## Semantic notes (carried over from sibling packages)
+## Semantic notes
 
-- Swidge fees are itemised: Layerswap's `included: true` entries are in **source-token base units** (satoshis); the network-fee entry (the PSBT fee) is non-included and also in satoshis, but keyed to the `'BTC'` token. Never sum across entries with different `token`s.
-- In `swidge()` the PSBT is built and signed before the fee guards run (the real fee is only knowable from the built PSBT), but broadcast happens strictly after all guards pass.
-- Legacy `BridgeResult.bridgeFee` is in **source-token base units** (= sum of `included` swidge fees). `LayerswapProtocolConfig.bridgeMaxFee` is compared against that sum only.
+- The PSBT fee entry is non-included and in satoshis, keyed to the `'BTC'` token. See the root `AGENTS.md` for the shared fee semantics.
+- `_prepareDeposit` builds and signs the PSBT before core runs the fee guards (the real fee is only knowable from the built PSBT); `_sendDeposit` broadcasts strictly after all guards pass.
 
 ## wdk-wallet version pin
 
-All packages pin `@tetherto/wdk-wallet@1.0.0-beta.17` as the dev dependency, with peer dep `>=1.0.0-beta.17`. Accounts are consumed duck-typed, never via `instanceof`.
+`@tetherto/wdk-wallet` and `@tetherto/wdk-wallet-btc` are regular `dependencies` (the source and the generated type definitions depend on them), pinned to exact versions (`1.0.0-beta.25` / `1.0.0-beta.17`) — never ranges, since new WDK beta versions can include breaking changes. Accounts are consumed duck-typed, never via `instanceof`.
+
+## Tests
+
+Tests cover **only the Bitcoin specifics** (network mapping, memo encoding, PSBT deposit, fee rate / confirmation target, balance and client errors, account detection); the shared behaviour is tested once in core (`packages/layerswap-core/tests/layerswap-swidge-protocol.test.js`). The Layerswap API is mocked with the shared msw fixtures of `@layerswap/wdk-protocol-swidge-layerswap-test-utils` (`setupLayerswapServer`, `layerswapApi`) — never redeclare them here. The wallet account is a duck-typed fixture exposing the protected members above, with a real BIP-32 master node so inputs are actually signed.
 
 ## Coding conventions
 

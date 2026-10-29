@@ -3,6 +3,7 @@ export type LayerswapToken = import('./layerswap-api-client.js').LayerswapToken;
 export type LayerswapQuote = import('./layerswap-api-client.js').LayerswapQuote;
 export type LayerswapSwapResponse = import('./layerswap-api-client.js').LayerswapSwapResponse;
 export type LayerswapSwapTransaction = import('./layerswap-api-client.js').LayerswapSwapTransaction;
+export type LayerswapSwap = import('./layerswap-api-client.js').LayerswapSwap;
 export type LayerswapSwidgeStatus = 'pending' | 'action-required' | 'completed' | 'failed' | 'refund-pending' | 'refunded' | 'cancelled' | 'expired' | 'partial';
 export type LayerswapSwidgeFee = {
     type: 'network' | 'protocol' | 'affiliate' | 'other';
@@ -28,6 +29,35 @@ export type LayerswapSwidgeStatusResult = {
     status: LayerswapSwidgeStatus;
     transactions?: LayerswapSwidgeTransaction[];
 };
+export type LayerswapSwidgeStatusOptions = {
+    /**
+     * - The source chain: Layerswap network name or chain id.
+     */
+    fromChain?: string | number;
+    /**
+     * - The destination chain: Layerswap network name or chain id.
+     */
+    toChain?: string | number;
+};
+export type LayerswapSwidgeSupportedChain = {
+    id: string;
+    name: string;
+    type: string;
+    nativeToken: string;
+};
+export type LayerswapSwidgeSupportedToken = {
+    token: string;
+    chain: string;
+    symbol: string;
+    decimals: number;
+    address?: string;
+    name?: string;
+};
+export type LayerswapSwidgeSupportedTokensOptions = {
+    fromChain?: string | number;
+    fromToken?: string;
+    toChain?: string | number;
+};
 /**
  * Maps a Layerswap swap status to the WDK swidge status vocabulary.
  *
@@ -50,30 +80,33 @@ export declare function mapSwapTransactions(transactions?: LayerswapSwapTransact
  * Layerswap's swap-level status can lag behind it (e.g. a swap can sit in
  * `ls_transfer_pending` after the payout has already confirmed on-chain).
  *
- * @param {import('./layerswap-api-client.js').LayerswapSwap} swap
+ * @param {LayerswapSwap} swap
  * @returns {LayerswapSwidgeStatus}
  */
-export declare function deriveSwidgeStatus(swap: import('./layerswap-api-client.js').LayerswapSwap): LayerswapSwidgeStatus;
+export declare function deriveSwidgeStatus(swap: LayerswapSwap): LayerswapSwidgeStatus;
 /**
  * Builds a WDK swidge status result from a `GET /api/v2/swaps/{id}` response.
  * The status is transaction-first (see {@link deriveSwidgeStatus}).
  *
+ * The optional chain hints constrain the lookup: if the swap's source (destination)
+ * network does not match `fromChain` (`toChain`) — compared case-insensitively against
+ * the Layerswap network name and its chain id — no swidge exists for the given id on
+ * those chains, and a `NoSuchElementError` is thrown.
+ *
  * @param {LayerswapSwapResponse} response
+ * @param {LayerswapSwidgeStatusOptions} [options] - Optional chain hints.
  * @returns {LayerswapSwidgeStatusResult}
+ * @throws {ProviderError} If the response is missing the swap details.
+ * @throws {NoSuchElementError} If the swap does not match the given chain hints.
  */
-export declare function buildStatusResult(response: LayerswapSwapResponse): LayerswapSwidgeStatusResult;
+export declare function buildStatusResult(response: LayerswapSwapResponse, options?: LayerswapSwidgeStatusOptions): LayerswapSwidgeStatusResult;
 /**
  * Maps the Layerswap network catalog to WDK swidge supported chains.
  *
  * @param {LayerswapNetwork[]} networks
- * @returns {Array<{ id: string, name: string, type: string, nativeToken: string }>}
+ * @returns {LayerswapSwidgeSupportedChain[]}
  */
-export declare function buildSupportedChains(networks: LayerswapNetwork[]): Array<{
-    id: string;
-    name: string;
-    type: string;
-    nativeToken: string;
-}>;
+export declare function buildSupportedChains(networks: LayerswapNetwork[]): LayerswapSwidgeSupportedChain[];
 /**
  * Flattens the Layerswap network catalog to WDK swidge supported tokens.
  *
@@ -82,21 +115,10 @@ export declare function buildSupportedChains(networks: LayerswapNetwork[]): Arra
  * Layerswap's sources/destinations endpoints and is not applied here.
  *
  * @param {LayerswapNetwork[]} networks
- * @param {{ fromChain?: string | number, fromToken?: string, toChain?: string | number }} [options]
- * @returns {Array<{ token: string, chain: string, symbol: string, decimals: number, address?: string, name?: string }>}
+ * @param {LayerswapSwidgeSupportedTokensOptions} [options]
+ * @returns {LayerswapSwidgeSupportedToken[]}
  */
-export declare function buildSupportedTokens(networks: LayerswapNetwork[], options?: {
-    fromChain?: string | number;
-    fromToken?: string;
-    toChain?: string | number;
-}): Array<{
-    token: string;
-    chain: string;
-    symbol: string;
-    decimals: number;
-    address?: string;
-    name?: string;
-}>;
+export declare function buildSupportedTokens(networks: LayerswapNetwork[], options?: LayerswapSwidgeSupportedTokensOptions): LayerswapSwidgeSupportedToken[];
 /**
  * Builds the itemised WDK fee breakdown for a Layerswap quote. Both components are
  * deducted from the source amount by Layerswap, so they are denominated in the
@@ -133,8 +155,33 @@ export declare function parseCompletionTime(value?: string): number | undefined;
  *
  * @param {number} [slippage]
  * @returns {string | undefined}
+ * @throws {ValueError} If the slippage is not a non-negative number.
  */
 export declare function formatSlippage(slippage?: number): string | undefined;
+/**
+ * Converts an integer option (an amount in base units, or basis points) to a bigint.
+ *
+ * @param {number | bigint | string | undefined} value - The option value.
+ * @param {string} name - The option name, used in the error message.
+ * @returns {bigint | undefined} The value as a bigint, or undefined if the option is not set.
+ * @throws {ValueError} If the value is not an integer.
+ */
+export declare function toBigIntOption(value: number | bigint | string | undefined, name: string): bigint | undefined;
+export type LayerswapFeeGuardsConfig = {
+    /**
+     * - Maximum network fee, in basis points of the input amount.
+     */
+    maxNetworkFeeBps?: number | bigint;
+    /**
+     * - Maximum protocol fee, in basis points of the input amount.
+     */
+    maxProtocolFeeBps?: number | bigint;
+};
+/**
+ * @typedef {Object} LayerswapFeeGuardsConfig
+ * @property {number | bigint} [maxNetworkFeeBps] - Maximum network fee, in basis points of the input amount.
+ * @property {number | bigint} [maxProtocolFeeBps] - Maximum protocol fee, in basis points of the input amount.
+ */
 /**
  * Enforces the WDK `maxNetworkFeeBps` / `maxProtocolFeeBps` guards against a fee
  * breakdown, in basis points of the input amount.
@@ -146,9 +193,20 @@ export declare function formatSlippage(slippage?: number): string | undefined;
  * @param {LayerswapSwidgeFee[]} fees
  * @param {bigint} fromTokenAmount - The input amount in source-token base units.
  * @param {string} sourceTokenSymbol
- * @param {{ maxNetworkFeeBps?: number | bigint, maxProtocolFeeBps?: number | bigint }} [config]
+ * @param {LayerswapFeeGuardsConfig} [config]
+ * @throws {ValueError} If a guard is not an integer.
+ * @throws {MaximumFeeExceededError} If a fee exceeds its basis-points guard.
  */
-export declare function assertFeeGuards(fees: LayerswapSwidgeFee[], fromTokenAmount: bigint, sourceTokenSymbol: string, config?: {
-    maxNetworkFeeBps?: number | bigint;
-    maxProtocolFeeBps?: number | bigint;
-}): void;
+export declare function assertFeeGuards(fees: LayerswapSwidgeFee[], fromTokenAmount: bigint, sourceTokenSymbol: string, config?: LayerswapFeeGuardsConfig): void;
+/**
+ * Normalizes an error raised by a wallet account (or by the chain SDK it relies on) so that
+ * it complies with the `ISwidgeProtocol` throw contract:
+ * - errors already in the contract are returned as-is;
+ * - `TransactionError` / `TransferError` with an insufficient-balance reason become a
+ *   `SwidgeError` with the same reason;
+ * - anything else is wrapped in a `ProviderError`, keeping the original error as `cause`.
+ *
+ * @param {unknown} error - The error raised by the wallet account.
+ * @returns {Error} The normalized error.
+ */
+export declare function normalizeWalletError(error: unknown): Error;

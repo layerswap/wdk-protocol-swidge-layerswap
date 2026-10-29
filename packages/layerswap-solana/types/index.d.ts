@@ -1,9 +1,10 @@
-export type BridgeResult = import('@tetherto/wdk-wallet/protocols').BridgeResult;
-export type LayerswapProtocolConfig = import('./src/layerswap-protocol-solana.js').LayerswapProtocolConfig;
-export type BridgeOptions = import('./src/layerswap-protocol-solana.js').BridgeOptions;
-export type LayerswapBridgeResult = import('./src/layerswap-protocol-solana.js').LayerswapBridgeResult;
-/** @typedef {import('@tetherto/wdk-wallet/protocols').BridgeResult} BridgeResult */
-/** @typedef {import('./src/layerswap-protocol-solana.js').LayerswapProtocolConfig} LayerswapProtocolConfig */
-/** @typedef {import('./src/layerswap-protocol-solana.js').BridgeOptions} BridgeOptions */
-/** @typedef {import('./src/layerswap-protocol-solana.js').LayerswapBridgeResult} LayerswapBridgeResult */
+export type WalletAccountSolana = import('@tetherto/wdk-wallet-solana').WalletAccountSolana;
+export type WalletAccountReadOnlySolana = import('@tetherto/wdk-wallet-solana').WalletAccountReadOnlySolana;
+export type SolanaTransactionMessage = import('@solana/kit').BaseTransactionMessage;
+export type LayerswapSolanaPreparedDeposit = import('./src/layerswap-protocol-solana.js').LayerswapSolanaPreparedDeposit;
+/** @typedef {import('@tetherto/wdk-wallet-solana').WalletAccountSolana} WalletAccountSolana */
+/** @typedef {import('@tetherto/wdk-wallet-solana').WalletAccountReadOnlySolana} WalletAccountReadOnlySolana */
+/** @typedef {import('@solana/kit').BaseTransactionMessage} SolanaTransactionMessage */
+/** @typedef {import('./src/layerswap-protocol-solana.js').LayerswapSolanaPreparedDeposit} LayerswapSolanaPreparedDeposit */
 export { default } from './src/layerswap-protocol-solana.js';
+export * from '@layerswap/wdk-protocol-swidge-layerswap-core/protocol';
