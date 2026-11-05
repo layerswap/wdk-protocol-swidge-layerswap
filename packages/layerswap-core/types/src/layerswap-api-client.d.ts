@@ -88,7 +88,8 @@
  * @typedef {Object} LayerswapSwapResponse
  * @property {LayerswapSwap} swap
  * @property {LayerswapDepositAction[]} [deposit_actions]
- * @property {LayerswapQuoteResponse} [quote]
+ * @property {LayerswapQuote} [quote] - The locked-in quote. Unlike `GET /api/v2/quote`
+ *   (a `LayerswapQuoteResponse`), the swap endpoints return the quote flat, not nested.
  */
 /**
  * @typedef {Object} LayerswapCreateSwapParams
@@ -419,7 +420,11 @@ export type LayerswapQuoteResponse = {
 export type LayerswapSwapResponse = {
     swap: LayerswapSwap;
     deposit_actions?: LayerswapDepositAction[];
-    quote?: LayerswapQuoteResponse;
+    /**
+     * - The locked-in quote. Unlike `GET /api/v2/quote`
+     * (a `LayerswapQuoteResponse`), the swap endpoints return the quote flat, not nested.
+     */
+    quote?: LayerswapQuote;
 };
 export type LayerswapCreateSwapParams = {
     source_network: string;

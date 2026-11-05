@@ -99,7 +99,7 @@ export const layerswapApi = {
     HttpResponse.json({
       data: {
         swap: { id: swapId, status: 'user_transfer_pending' },
-        quote: { quote },
+        quote,
         deposit_actions: depositActions
       }
     })),

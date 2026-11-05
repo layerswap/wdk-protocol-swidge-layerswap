@@ -119,7 +119,8 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
  * @typedef {Object} LayerswapSwapResponse
  * @property {LayerswapSwap} swap
  * @property {LayerswapDepositAction[]} [deposit_actions]
- * @property {LayerswapQuoteResponse} [quote]
+ * @property {LayerswapQuote} [quote] - The locked-in quote. Unlike `GET /api/v2/quote`
+ *   (a `LayerswapQuoteResponse`), the swap endpoints return the quote flat, not nested.
  */
 
 /**

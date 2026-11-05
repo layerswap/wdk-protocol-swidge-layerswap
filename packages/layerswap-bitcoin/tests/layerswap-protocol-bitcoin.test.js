@@ -282,6 +282,21 @@ describe('LayerswapProtocolBitcoin', () => {
       expect(result.fees.at(-1).amount).toBeGreaterThan(0n)
     })
 
+    test('builds the deposit to a Taproot (P2TR) deposit address', async () => {
+      const taprootAddress = payments.p2tr({
+        internalPubkey: Buffer.from(TEST_CHILD_NODE.publicKey).subarray(1),
+        network: TEST_NETWORK
+      }).address
+      useSwapHandlers(depositAction({ depositAddress: taprootAddress }))
+
+      const { account, broadcast } = makeAccount()
+      await new LayerswapProtocolBitcoin(account).swidge(SWIDGE_OPTIONS)
+
+      const tx = Transaction.fromHex(broadcast.mock.calls[0][0])
+      expect(Buffer.from(tx.outs[0].script).toString('hex')).toMatch(/^5120[0-9a-f]{64}$/)
+      expect(tx.outs[0].value).toBe(100_000n)
+    })
+
     test('estimates the fee rate with the configured confirmationTarget', async () => {
       useSwapHandlers()
 
@@ -398,6 +413,33 @@ describe('LayerswapProtocolBitcoin', () => {
       useSwapHandlers()
 
       const { account, broadcast } = makeAccount({ utxos: [] })
+      const error = await new LayerswapProtocolBitcoin(account).swidge(SWIDGE_OPTIONS).catch((err) => err)
+
+      expect(error).toBeInstanceOf(SwidgeError)
+      expect(error.reason).toBe(SwidgeErrorReason.INSUFFICIENT_BALANCE)
+      expect(broadcast).not.toHaveBeenCalled()
+    })
+
+    test('pays the OP_RETURN out of the leftover when coin selection adds no change output', async () => {
+      useSwapHandlers()
+
+      // 1,600 sats leftover: too little for a change output at 10 sat/vB, but enough for
+      // the 110 vB transaction plus the 15-byte OP_RETURN (1,250 sats).
+      const { account, broadcast } = makeAccount({ utxos: [makeUtxo({ value: 101_600 })] })
+      const result = await new LayerswapProtocolBitcoin(account).swidge(SWIDGE_OPTIONS)
+
+      const tx = Transaction.fromHex(broadcast.mock.calls[0][0])
+      expect(tx.outs).toHaveLength(2)
+      expect(tx.outs[0].value).toBe(100_000n)
+      expect(tx.outs[1].script[0]).toBe(0x6a)
+      expect(result.fees.at(-1).amount).toBe(1_600n)
+    })
+
+    test('throws a SwidgeError (INSUFFICIENT_BALANCE) when the leftover cannot also cover the OP_RETURN', async () => {
+      useSwapHandlers()
+
+      // 1,200 sats covers coin selection's 1,100 sats, but not the OP_RETURN's extra 150.
+      const { account, broadcast } = makeAccount({ utxos: [makeUtxo({ value: 101_200 })] })
       const error = await new LayerswapProtocolBitcoin(account).swidge(SWIDGE_OPTIONS).catch((err) => err)
 
       expect(error).toBeInstanceOf(SwidgeError)

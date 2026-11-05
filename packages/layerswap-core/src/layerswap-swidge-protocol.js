@@ -945,7 +945,7 @@ export default class LayerswapSwidgeProtocol extends SwidgeProtocol {
       throw this._toProviderError(error)
     }
 
-    return { swap, action, quote: response.quote?.quote }
+    return { swap, action, quote: response.quote }
   }
 
   /**

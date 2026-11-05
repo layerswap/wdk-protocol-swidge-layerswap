@@ -20,9 +20,9 @@ import {
   SwidgeErrorReason,
   ValueError
 } from '@tetherto/wdk-wallet/protocols'
-import { Psbt, opcodes, script as bscript } from 'bitcoinjs-lib'
+import { Psbt, initEccLib, opcodes, script as bscript } from 'bitcoinjs-lib'
 import { coinselect } from '@bitcoinerlab/coinselect'
-import { DescriptorsFactory } from '@bitcoinerlab/descriptors'
+import { DescriptorsFactory, ecc } from '@bitcoinerlab/descriptors'
 
 import {
   LayerswapSwidgeProtocol,
@@ -65,6 +65,11 @@ const OP_RETURN_MAX_BYTES = 80
 // Quote-time fee approximation. Swidge-time fee is read from the built PSBT.
 // 10 sat/vB × ~150 vB (1 input + 2 outputs P2WPKH + OP_RETURN) ≈ 1500 sats.
 const BTC_FEE_APPROX_SATS = 1500n
+
+// bitcoinjs-lib needs an ECC library to handle Taproot (P2TR, `bc1p…`) addresses, which
+// Layerswap may return as deposit addresses. Initialise our own bitcoinjs-lib instance
+// instead of relying on the wallet's: package managers can install separate copies.
+initEccLib(ecc)
 
 const { Output } = DescriptorsFactory()
 
@@ -431,13 +436,21 @@ export default class LayerswapProtocolBitcoin extends LayerswapSwidgeProtocol {
 
     const selectedUtxos = result.utxos.map(({ __ref }) => __ref)
     const total = selectedUtxos.reduce((s, u) => s + account._toBigInt(u.value), 0n)
-    const baseFee = result.fee ?? 0n
-    let fee = baseFee + opReturnExtraFee
-    let changeValue = total - fee - amount
+    // With a change output, coinselect's `fee` prices the transaction without the OP_RETURN,
+    // which is then paid out of the change. Without one, coinselect has already folded the
+    // sub-dust leftover into `fee`: the OP_RETURN must fit within that leftover instead, so
+    // the required fee is priced from the transaction's vsize.
+    const hasChange = result.targets.length > 1
+    const requiredFee = hasChange
+      ? account._toBigInt(result.fee ?? 0n) + opReturnExtraFee
+      : BigInt(Math.ceil(result.vsize)) * feeRate + opReturnExtraFee
 
-    if (changeValue < 0n) {
+    if (total - amount < requiredFee) {
       throw new SwidgeError('Insufficient balance after fees (OP_RETURN overhead).', { reason: SwidgeErrorReason.INSUFFICIENT_BALANCE })
     }
+
+    let fee = hasChange ? requiredFee : total - amount
+    let changeValue = total - fee - amount
     if (changeValue <= dustLimit) {
       fee = fee + changeValue
       changeValue = 0n
