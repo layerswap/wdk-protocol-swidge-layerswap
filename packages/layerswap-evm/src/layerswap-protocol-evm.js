@@ -14,12 +14,11 @@
 
 'use strict'
 
-import { ProviderErrorReason } from '@tetherto/wdk-wallet'
 import {
-  ProviderError,
   ProviderRequiredError,
   SwidgeError,
-  SwidgeErrorReason
+  SwidgeErrorReason,
+  ValueError
 } from '@tetherto/wdk-wallet/protocols'
 import { isError } from 'ethers'
 
@@ -29,9 +28,9 @@ import {
   normalizeWalletError
 } from '@layerswap/wdk-protocol-swidge-layerswap-core'
 
-const CALL_DATA_PATTERN = /^0x(?:[0-9a-f]{2})*$/i
-
 /** @typedef {import('ethers').Provider} Provider */
+
+/** @typedef {import('@tetherto/wdk-wallet').IWalletAccount} IWalletAccount */
 
 /** @typedef {import('@tetherto/wdk-wallet-evm').WalletAccountEvm} WalletAccountEvm */
 /** @typedef {import('@tetherto/wdk-wallet-evm').WalletAccountReadOnlyEvm} WalletAccountReadOnlyEvm */
@@ -86,6 +85,8 @@ const CALL_DATA_PATTERN = /^0x(?:[0-9a-f]{2})*$/i
  * @property {LayerswapEvmDepositTransaction} tx - The deposit transaction to broadcast.
  * @property {bigint} fee - The estimated gas cost of the deposit (in wei).
  */
+
+const CALL_DATA_PATTERN = /^0x(?:[0-9a-f]{2})*$/i
 
 /**
  * WDK swidge protocol that drives a Layerswap swap from an EVM wallet account (standard
@@ -144,7 +145,13 @@ export default class LayerswapProtocolEvm extends LayerswapSwidgeProtocol {
     this._chainId = undefined
   }
 
-  /** @protected */
+  /**
+   * The symbol of the evm native token, used for gas fee entries when the Layerswap network
+   * catalog does not report it.
+   *
+   * @protected
+   * @type {string}
+   */
   get _nativeTokenSymbol () {
     return 'ETH'
   }
@@ -194,14 +201,13 @@ export default class LayerswapProtocolEvm extends LayerswapSwidgeProtocol {
    * @protected
    * @param {LayerswapDepositContext} context - The deposit context.
    * @returns {Promise<LayerswapEvmPreparedDeposit>} The prepared deposit.
-   * @throws {ProviderError} If the deposit action is malformed, or the provider fails.
+   * @throws {ValueError} If the deposit action is malformed.
+   * @throws {ProviderError} If the provider fails.
    * @throws {SwidgeError} If the account has insufficient funds.
    */
   async _prepareDeposit ({ action, route, fromTokenAmount, config }) {
     if (!action.to_address) {
-      throw new ProviderError('Layerswap deposit action is missing a destination address.', {
-        reason: ProviderErrorReason.INTERNAL_SERVER_ERROR
-      })
+      throw new ValueError('The deposit action is missing a destination address.')
     }
 
     const isErc20 = this._isErc20(route.sourceToken)
@@ -295,10 +301,10 @@ export default class LayerswapProtocolEvm extends LayerswapSwidgeProtocol {
    * token contract, so it cannot be sent without call data; a native deposit may have none.
    *
    * @private
-   * @param {unknown} callData - The call data of the deposit action.
+   * @param {string | null | undefined} callData - The call data of the deposit action.
    * @param {boolean} isErc20 - True if the source token is an erc-20 token.
    * @returns {string} The call data (`'0x'` when a native deposit has none).
-   * @throws {ProviderError} If the call data is malformed, or missing for an erc-20 deposit.
+   * @throws {ValueError} If the call data is malformed, or missing for an erc-20 deposit.
    */
   _parseCallData (callData, isErc20) {
     const isEmpty = callData === undefined || callData === null || callData === '' || callData === '0x'
@@ -308,9 +314,7 @@ export default class LayerswapProtocolEvm extends LayerswapSwidgeProtocol {
     }
 
     if (isEmpty || typeof callData !== 'string' || !CALL_DATA_PATTERN.test(callData)) {
-      throw new ProviderError(`Layerswap returned invalid call data '${callData}' for an ${isErc20 ? 'erc-20' : 'native'} deposit.`, {
-        reason: ProviderErrorReason.INTERNAL_SERVER_ERROR
-      })
+      throw new ValueError(`Invalid call data '${callData}' for an ${isErc20 ? 'erc-20' : 'native'} deposit.`)
     }
 
     return callData
@@ -333,12 +337,10 @@ export default class LayerswapProtocolEvm extends LayerswapSwidgeProtocol {
    * `_isWritableAccount`.
    *
    * @private
-   * @param {unknown} account - The bound account.
+   * @param {IWalletAccount} account - The bound account.
    * @returns {boolean} True if the account is an erc-4337 account.
    */
   _isErc4337Account (account) {
-    const proto = account != null ? Object.getPrototypeOf(account) : null
-    const ctor = proto && proto.constructor
-    return Boolean(ctor && ctor.name === 'WalletAccountEvmErc4337')
+    return Object.getPrototypeOf(account).constructor.name === 'WalletAccountEvmErc4337'
   }
 }

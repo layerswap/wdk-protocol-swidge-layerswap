@@ -46,7 +46,7 @@ The hash `swidge()` returns is the wallet's body hash of the deposit's external 
 
 The shared contract (`ISwidgeProtocol` `@throws`, LSP) is implemented in core. TON-specific parts:
 
-- disposed account: `account.disposed`, or `keyPair.privateKey === null` after `WalletAccountTon.dispose()` → `DisposalError` (core's default `_isDisposedAccount`);
+- disposed account: `account.disposed` → `DisposalError` (checked in core);
 - missing / malformed deposit `to_address` → `ProviderError`;
 - `@tetherto/wdk-wallet-ton` throws plain `Error`s, so `_callWallet` maps "not connected to ton center" → `ProviderRequiredError`, "exceeded maximum fee" → `MaximumFeeExceededError`, and everything else through core's `normalizeWalletError` (→ `ProviderError`).
 

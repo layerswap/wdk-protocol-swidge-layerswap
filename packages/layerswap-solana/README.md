@@ -65,7 +65,7 @@ The legacy `bridge` / `quoteBridge` surface, the semantics of fee entries, `getS
 - **Source cluster detection:** the genesis hash reported by the account's rpc client is mapped to a Layerswap network (`SOLANA_MAINNET`, `SOLANA_DEVNET`, `SOLANA_TESTNET`). The rpc client is the one the wallet account was built with (`account._rpc`), so every provider shape the wallet supports (rpc url, rpc client, or a fail-over list of them) works as-is. A `fromChain` (legacy: `sourceChain`) must match the rpc cluster; for an rpc on another svm chain Layerswap lists (e.g. Eclipse), whose genesis hash is not known, pass its `fromChain`. Without it an unknown genesis hash throws a `ValueError`; a missing rpc throws a `ProviderRequiredError`.
 - **Deposit transaction:** Layerswap's `call_data` is a base64-encoded, unsigned legacy Solana transaction. It is quoted, signed and broadcast through the wallet account (`account.quoteSendTransaction(callData)` / `account.sendTransaction(callData)`), so the wallet's `transactionMaxFee` option is honoured too. Missing or malformed `call_data` throws a `ProviderError`.
 - **Fees:** the source-chain gas entry is in **lamports** (`token: 'SOL'`). Quotes approximate it with the 5000-lamport per-signature fee; `swidge()` reports the fee quoted by the wallet for the actual deposit transaction.
-- **Accounts:** read-only accounts (no `keyPair` / `sendTransaction`) get an `AccountRequiredError`; a disposed `WalletAccountSolana` (its `keyPair.privateKey` erased to `null`) gets a `DisposalError`.
+- **Accounts:** read-only accounts (no `keyPair` / `sendTransaction`) get an `AccountRequiredError`; a disposed account (`account.disposed`) gets a `DisposalError`.
 
 ## Development
 

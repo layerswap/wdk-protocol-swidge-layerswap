@@ -6,8 +6,8 @@ Bitcoin source-VM package. `LayerswapProtocolBitcoin` is a **thin subclass** of 
 
 - **Architecture:** `LayerswapProtocolBitcoin extends LayerswapSwidgeProtocol<LayerswapBitcoinSwidgeOptions, LayerswapSwidgeConfig, LayerswapBitcoinBridgeOptions>`. Implemented hooks:
   - `_detectSourceNetwork()` — maps `account._config.network` to the Layerswap network (resolved through the network catalog);
-  - `_isWritableAccount(account)` / `_isDisposedAccount(account)`;
-  - `_assertSwidgeRoute(route)` — only native BTC can be deposited (`InvalidTokenError`, before any swap is created);
+  - `_isWritableAccount(account)`;
+  - `_assertSwidgeRoute(route, fromTokenAmount)` — only native BTC above the account's dust limit can be deposited (`InvalidTokenError` / `ValueError`, before any swap is created);
   - `_quoteSourceGas()` — the 1500-sat quote approximation;
   - `_prepareDeposit(context)` / `_sendDeposit(deposit)` — build + sign the PSBT, then broadcast it via `account._client`;
   - `_toSwidgeOptions(options)` — forwards the legacy `feeRate` bridge option.
@@ -57,7 +57,7 @@ The `ISwidgeProtocol` throw contract is implemented once in core. Bitcoin-specif
 - no / insufficient UTXOs (incl. after the OP_RETURN overhead) → `SwidgeError` `INSUFFICIENT_BALANCE` (→ `BridgeError` through `bridge`);
 - missing or malformed `to_address` (incl. an address of another network), malformed or oversized `call_data` memo → `ProviderError` (`INTERNAL_SERVER_ERROR`), checked before anything is signed;
 - bitcoin client failures (`_ensureConnected`, `estimateFee`, `listUnspent`, `getTransaction`, `broadcast`) go through core's `_callWallet` / `normalizeWalletError` → `ProviderError`;
-- `WalletAccountBtc.dispose()` sets `_masterNode` to `undefined` while keeping `_account`, so a full account without a master node is treated as disposed (`DisposalError`); read-only accounts (no `_account`) → `AccountRequiredError`.
+- A disposed account (`account.disposed`) → `DisposalError`; read-only accounts (no `_account`) → `AccountRequiredError`.
 
 ## `call_data` encoding (matches Layerswap UI)
 

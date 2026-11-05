@@ -31,10 +31,10 @@ The chain-agnostic WDK swidge protocol, extended by every VM package. It impleme
 | `_detectSourceNetwork()` *(required)* | The Layerswap network the wallet account is connected to (used when `fromChain` is omitted). |
 | `_assertAccountNetwork(network)` | Checks that the account is connected to the network named by `fromChain` (default: compares it with `_detectSourceNetwork()`, skipped without a provider). |
 | `_resolveTransactionId(hash)` | Maps a hash returned by `swidge()` to the id Layerswap tracks the deposit by, for `getTransactionStatus` (default: the hash itself). |
-| `_isWritableAccount(account)` / `_isDisposedAccount(account)` | Stricter account checks than the default `sendTransaction` / `account.disposed` duck-typing. |
+| `_isWritableAccount(account)` | A stricter writable-account check than the default `sendTransaction` duck-typing. |
 | `_prepareDeposit(context)` / `_sendDeposit(deposit, config)` *(required)* | Build (and quote) the source-chain deposit described by the Layerswap deposit action, then broadcast it. |
 | `_quoteSourceGas(route, amount, sourceAddress)` | Estimated source-chain gas for quotes. |
-| `_assertSwidgeRoute(route)` | VM-specific route checks run before a swap is created. |
+| `_assertSwidgeRoute(route, fromTokenAmount)` | VM-specific route and amount checks run before a swap is created. |
 | `_callWallet(call)` | Wallet-call error normalisation; override to map chain-specific errors first. |
 | `_nativeTokenSymbol` | Fallback symbol of the native gas token. |
 
@@ -90,7 +90,7 @@ Every method honours the throw contract of the WDK `ISwidgeProtocol` interface. 
 | --- | --- |
 | `AccountRequiredError` | `swidge`/`bridge` without a non read-only account. |
 | `DisposalError` | `swidge`/`bridge` with a disposed account. |
-| `ValueError` | Invalid options (exact-out, missing `toChain`/`fromTokenAmount`/`recipient`, same-chain route, invalid slippage), unsupported networks, or parameters rejected by Layerswap. |
+| `ValueError` | Invalid options (exact-out, missing `fromTokenAmount`/`recipient`, a same-chain swap of a token into itself, invalid slippage), unsupported networks, or parameters rejected by Layerswap. |
 | `InvalidTokenError` | The source or destination token is not supported by Layerswap on that network. |
 | `ProviderRequiredError` | The source chain must be detected but the account has no provider. |
 | `ProviderError` | The Layerswap API or the chain provider fails (`reason`: `NETWORK_ERROR`, `REQUEST_TIMEOUT`, `UNAUTHORIZED`, `FORBIDDEN`, `INTERNAL_SERVER_ERROR`). |
@@ -105,7 +105,7 @@ Every method honours the throw contract of the WDK `ISwidgeProtocol` interface. 
 | --- | --- | --- | --- |
 | `fromToken` | `string` | ✓ | Source token: contract / mint address OR Layerswap symbol (`'USDC'`). |
 | `fromTokenAmount` | `number \| bigint` | ✓ | Source amount in base units. **Exact-in only** — passing `toTokenAmount` throws. |
-| `toChain` | `string \| number` | ✓ | Layerswap destination network name (`<CHAIN>_<ENV>` uppercase, e.g. `'ARBITRUM_MAINNET'`). Required: Layerswap does not support same-chain swaps. |
+| `toChain` | `string \| number` | | Layerswap destination network name (`<CHAIN>_<ENV>` uppercase, e.g. `'ARBITRUM_MAINNET'`). Defaults to the source network (same-chain swap). |
 | `toToken` | `string` | | Destination token (address or symbol). Defaults to the source token's symbol. |
 | `recipient` | `string` | | Destination recipient. Defaults to the account address when source and destination share the same VM type; required otherwise. |
 | `fromChain` | `string \| number` | | Layerswap source network name. Defaults to the network detected from the wallet account; when an account with a provider is bound, it must name that network (a mismatch throws a `ValueError`, so a deposit is never sent on another chain than the swap's). |
@@ -126,7 +126,7 @@ const { fee, bridgeFee } = await protocol.quoteBridge({ targetChain, recipient, 
 const { hash, swapId } = await protocol.bridge({ targetChain, recipient, token, amount })
 ```
 
-`hash` is the source-chain deposit tx hash, `fee` the native-unit gas cost, `bridgeFee` the Layerswap fee in **source-token base units**, and `swapId` the Layerswap swap id. Legacy `slippage` remains a percent string (`'0.5'`). The WDK base class additionally derives `swap`/`quoteSwap`, but Layerswap cannot fulfil same-chain swaps, so those always throw a `ValueError`.
+`hash` is the source-chain deposit tx hash, `fee` the native-unit gas cost, `bridgeFee` the Layerswap fee in **source-token base units**, and `swapId` the Layerswap swap id. Legacy `slippage` remains a percent string (`'0.5'`). The WDK base class additionally derives `swap`/`quoteSwap`, which run a same-chain swidge on the source network (`hash` is the Layerswap swap id).
 
 ## Semantic notes
 

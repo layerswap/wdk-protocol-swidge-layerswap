@@ -341,11 +341,12 @@ describe('LayerswapProtocolSolana', () => {
       await expect(new LayerswapProtocolSolana(account).swidge(SWIDGE_OPTIONS)).rejects.toThrow(AccountRequiredError)
     })
 
-    test('throws a DisposalError once the account has been disposed (private key erased)', async () => {
+    test('throws a DisposalError once the account has been disposed', async () => {
       const { account } = await makeAccount()
       account.dispose()
+      // WDK `IDisposable.disposed`, not implemented yet by the wallet account.
+      Object.defineProperty(account, 'disposed', { value: true })
 
-      expect(account.keyPair.privateKey).toBeNull()
       await expect(new LayerswapProtocolSolana(account).swidge(SWIDGE_OPTIONS)).rejects.toThrow(DisposalError)
     })
   })

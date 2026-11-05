@@ -28,7 +28,7 @@
     "lint:fix": "standard --fix",
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest",
     "test:coverage": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --coverage",
-    "test:e2e": "node tests/integration/swidge-testnet.mjs"
+    "test:e2e": "node tests/end-to-end/swidge-testnet.mjs"
   },
   "dependencies": {
     "@layerswap/wdk-protocol-swidge-layerswap-core": "workspace:*",
@@ -44,7 +44,7 @@
     "cross-env": "10.1.0",
     "jest": "30.4.2",
     "standard": "17.1.2",
-    "typescript": "7.0.2"
+    "typescript": "5.8.3"
   },
   "exports": {
     ".": {

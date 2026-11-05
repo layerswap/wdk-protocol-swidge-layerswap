@@ -20,6 +20,8 @@ import { InvalidTokenError, ValueError } from '@tetherto/wdk-wallet/protocols'
 /** @typedef {import('./layerswap-api-client.js').LayerswapNetwork} LayerswapNetwork */
 /** @typedef {import('./layerswap-api-client.js').LayerswapToken} LayerswapToken */
 
+const LEADING_ZEROS_PATTERN = /^0+(?=\d)/
+
 /**
  * Finds the Layerswap network whose on-chain id matches the given numeric chain id.
  *
@@ -139,7 +141,7 @@ export function parseDecimal (value, decimals) {
   const [intPart, fracPartRaw = ''] = body.split('.')
   const fracPart = fracPartRaw.slice(0, decimals).padEnd(decimals, '0')
 
-  const combined = `${intPart}${fracPart}`.replace(/^0+(?=\d)/, '')
+  const combined = `${intPart}${fracPart}`.replace(LEADING_ZEROS_PATTERN, '')
   if (combined.length === 0) return 0n
 
   const result = BigInt(combined)

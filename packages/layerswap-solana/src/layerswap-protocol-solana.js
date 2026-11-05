@@ -14,8 +14,7 @@
 
 'use strict'
 
-import { ProviderErrorReason } from '@tetherto/wdk-wallet'
-import { ProviderError, ProviderRequiredError, ValueError } from '@tetherto/wdk-wallet/protocols'
+import { ProviderRequiredError, ValueError } from '@tetherto/wdk-wallet/protocols'
 import {
   decompileTransactionMessageFetchingLookupTables,
   getBase64Encoder,
@@ -29,6 +28,8 @@ import {
   resolveNetworkByName
 } from '@layerswap/wdk-protocol-swidge-layerswap-core'
 
+/** @typedef {import('@tetherto/wdk-wallet').IWalletAccountReadOnly} IWalletAccountReadOnly */
+
 /** @typedef {import('@tetherto/wdk-wallet-solana').WalletAccountSolana} WalletAccountSolana */
 /** @typedef {import('@tetherto/wdk-wallet-solana').WalletAccountReadOnlySolana} WalletAccountReadOnlySolana */
 
@@ -39,6 +40,14 @@ import {
 /** @typedef {import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapSwidgeRoute} LayerswapSwidgeRoute */
 /** @typedef {import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapDepositContext} LayerswapDepositContext */
 /** @typedef {import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapBroadcastDeposit} LayerswapBroadcastDeposit */
+
+/** @typedef {import('@solana/kit').BaseTransactionMessage} SolanaTransactionMessage */
+
+/**
+ * @typedef {Object} LayerswapSolanaPreparedDeposit
+ * @property {SolanaTransactionMessage} message - The unsigned deposit transaction message, with a fresh blockhash.
+ * @property {bigint} fee - The estimated fee of the deposit transaction (in lamports).
+ */
 
 /**
  * Known Solana cluster genesis hashes → Layerswap network names.
@@ -62,14 +71,6 @@ const BASE64_PATTERN = /^[A-Za-z0-9+/]+={0,2}$/
 // Standard per-signature fee floor for Solana. Used as a quote-time approximation only;
 // the real fee is quoted by the wallet account on the deposit transaction at swidge() time.
 const SOLANA_PER_SIGNATURE_FEE_LAMPORTS = 5000n
-
-/** @typedef {import('@solana/kit').BaseTransactionMessage} SolanaTransactionMessage */
-
-/**
- * @typedef {Object} LayerswapSolanaPreparedDeposit
- * @property {SolanaTransactionMessage} message - The unsigned deposit transaction message, with a fresh blockhash.
- * @property {bigint} fee - The estimated fee of the deposit transaction (in lamports).
- */
 
 /**
  * WDK swidge protocol that drives a Layerswap swap from a Solana wallet account. The
@@ -138,7 +139,13 @@ export default class LayerswapProtocolSolana extends LayerswapSwidgeProtocol {
     this._genesisHash = undefined
   }
 
-  /** @protected */
+  /**
+   * The symbol of the solana native token, used for gas fee entries when the Layerswap
+   * network catalog does not report it.
+   *
+   * @protected
+   * @type {string}
+   */
   get _nativeTokenSymbol () {
     return 'SOL'
   }
@@ -221,11 +228,10 @@ export default class LayerswapProtocolSolana extends LayerswapSwidgeProtocol {
    * account.
    *
    * @protected
-   * @param {unknown} account - The bound account.
+   * @param {IWalletAccountReadOnly} account - The bound account.
    * @returns {boolean} True if the account can sign and send transactions.
    */
   _isWritableAccount (account) {
-    if (!account || typeof account !== 'object') return false
     if (typeof account.sendTransaction !== 'function') return false
     const keyPair = account.keyPair
     if (!keyPair || typeof keyPair !== 'object') return false
@@ -233,21 +239,8 @@ export default class LayerswapProtocolSolana extends LayerswapSwidgeProtocol {
   }
 
   /**
-   * Tests whether the bound (writable) account has been disposed. Besides the generic
-   * `disposed` flag, a disposed `WalletAccountSolana` erases its private key, so its
-   * `keyPair.privateKey` reads as `null`.
+   * Checks that the wallet account is connected to an rpc, which the deposit needs.
    *
-   * @protected
-   * @param {WalletAccountSolana} account - The bound account.
-   * @returns {boolean} True if the account has been disposed.
-   */
-  _isDisposedAccount (account) {
-    if (super._isDisposedAccount(account)) return true
-    const { privateKey } = account.keyPair
-    return !(privateKey instanceof Uint8Array) || privateKey.length !== 32
-  }
-
-  /**
    * @protected
    * @param {LayerswapSwidgeRoute} route - The resolved swidge route.
    * @throws {ProviderRequiredError} If the account is not connected to a provider.
@@ -278,21 +271,18 @@ export default class LayerswapProtocolSolana extends LayerswapSwidgeProtocol {
    * @protected
    * @param {LayerswapDepositContext} context - The deposit context.
    * @returns {Promise<LayerswapSolanaPreparedDeposit>} The prepared deposit.
-   * @throws {ProviderError} If the deposit transaction is malformed, or the rpc fails.
+   * @throws {ValueError} If the deposit transaction is malformed.
+   * @throws {ProviderError} If the rpc fails.
    */
   async _prepareDeposit ({ action }) {
     const callData = action.call_data
 
     if (typeof callData !== 'string' || callData.length === 0) {
-      throw new ProviderError('Layerswap deposit action for Solana is missing call_data; the wire-format transaction cannot be reconstructed.', {
-        reason: ProviderErrorReason.INTERNAL_SERVER_ERROR
-      })
+      throw new ValueError('The Solana deposit action is missing call_data; the wire-format transaction cannot be reconstructed.')
     }
 
     if (!BASE64_PATTERN.test(callData)) {
-      throw new ProviderError('Layerswap call_data for Solana is not a valid base64-encoded transaction.', {
-        reason: ProviderErrorReason.INTERNAL_SERVER_ERROR
-      })
+      throw new ValueError('The Solana call_data is not a valid base64-encoded transaction.')
     }
 
     const message = await this._buildDepositMessage(callData)
@@ -312,7 +302,8 @@ export default class LayerswapProtocolSolana extends LayerswapSwidgeProtocol {
    * @private
    * @param {string} callData - The base64-encoded deposit transaction.
    * @returns {Promise<SolanaTransactionMessage>} The deposit transaction message.
-   * @throws {ProviderError} If the deposit transaction is malformed, or the rpc fails.
+   * @throws {ValueError} If the deposit transaction is malformed.
+   * @throws {ProviderError} If the rpc fails.
    */
   async _buildDepositMessage (callData) {
     let compiledMessage
@@ -322,10 +313,7 @@ export default class LayerswapProtocolSolana extends LayerswapSwidgeProtocol {
       const [signatures, offset] = getShortU16Decoder().read(bytes, 0)
       compiledMessage = getCompiledTransactionMessageDecoder().decode(bytes.subarray(offset + 64 * signatures))
     } catch (error) {
-      throw new ProviderError('Layerswap call_data for Solana is not a valid transaction.', {
-        reason: ProviderErrorReason.INTERNAL_SERVER_ERROR,
-        cause: error
-      })
+      throw new ValueError('The Solana call_data is not a valid transaction.', { cause: error })
     }
 
     const message = await this._callWallet(() => decompileTransactionMessageFetchingLookupTables(compiledMessage, this._rpc))

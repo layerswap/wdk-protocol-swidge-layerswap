@@ -1,61 +1,3 @@
-import { LayerswapSwidgeProtocol } from '@layerswap/wdk-protocol-swidge-layerswap-core';
-export type WalletAccountBtc = import('@tetherto/wdk-wallet-btc').WalletAccountBtc;
-export type WalletAccountReadOnlyBtc = import('@tetherto/wdk-wallet-btc').WalletAccountReadOnlyBtc;
-export type LayerswapNetwork = import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapNetwork;
-export type LayerswapProtocolConfig = import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapProtocolConfig;
-export type LayerswapSwidgeOptions = import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapSwidgeOptions;
-export type LayerswapSwidgeConfig = import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapSwidgeConfig;
-export type LayerswapBridgeOptions = import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapBridgeOptions;
-export type LayerswapSwidgeRoute = import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapSwidgeRoute;
-export type LayerswapDepositContext = import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapDepositContext;
-export type LayerswapBroadcastDeposit = import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapBroadcastDeposit;
-export type LayerswapBitcoinProtocolConfig = LayerswapProtocolConfig & LayerswapSpecificBitcoinProtocolConfig;
-export type LayerswapSpecificBitcoinProtocolConfig = {
-    /**
-     * - Target confirmation block count for fee estimation. Default: 1.
-     */
-    confirmationTarget?: number;
-};
-export type LayerswapSpecificBitcoinOptions = {
-    /**
-     * - Override the fee rate (sat/vB) used for PSBT construction.
-     */
-    feeRate?: number | bigint;
-};
-export type LayerswapBitcoinSwidgeOptions = LayerswapSwidgeOptions & LayerswapSpecificBitcoinOptions;
-export type LayerswapBitcoinBridgeOptions = LayerswapBridgeOptions & LayerswapSpecificBitcoinOptions;
-export type LayerswapBitcoinPsbtParams = {
-    /**
-     * - The Layerswap deposit address.
-     */
-    depositAddress: string;
-    /**
-     * - The amount to deposit (in satoshis).
-     */
-    amount: bigint;
-    /**
-     * - The OP_RETURN payload carrying the swap reference.
-     */
-    memo: Buffer;
-    /**
-     * - The fee rate (sat/vB) to use instead of the estimate.
-     */
-    feeRateOverride?: number | bigint;
-};
-export type LayerswapBitcoinSignedPsbt = {
-    /**
-     * - The signed, finalized transaction (hex).
-     */
-    txHex: string;
-    /**
-     * - The transaction id.
-     */
-    txid: string;
-    /**
-     * - The transaction fee (in satoshis).
-     */
-    fee: bigint;
-};
 /**
  * The layerswap protocol configuration, plus the Bitcoin-specific options.
  *
@@ -119,75 +61,47 @@ export type LayerswapBitcoinSignedPsbt = {
  *
  * @extends {LayerswapSwidgeProtocol<LayerswapBitcoinSwidgeOptions, LayerswapSwidgeConfig, LayerswapBitcoinBridgeOptions>}
  */
-export default class LayerswapProtocolBitcoin extends LayerswapSwidgeProtocol<LayerswapBitcoinSwidgeOptions, LayerswapSwidgeConfig, LayerswapBitcoinBridgeOptions> {
+export default class LayerswapProtocolBitcoin extends LayerswapSwidgeProtocol<LayerswapBitcoinSwidgeOptions, import("@layerswap/wdk-protocol-swidge-layerswap-core/types/src/layerswap-swidge-protocol.js").LayerswapSwidgeConfig, LayerswapBitcoinBridgeOptions, import("@layerswap/wdk-protocol-swidge-layerswap-core/types/src/layerswap-swidge-protocol.js").LayerswapBridgeConfig> {
+    /**
+     * Creates a new swidge protocol for chain/token discovery only, without a wallet account.
+     *
+     * @overload
+     * @param {undefined} [account] - No account; only discovery and `fromChain`-scoped quotes work.
+     * @param {LayerswapBitcoinProtocolConfig} [config] - The layerswap protocol configuration.
+     */
+    constructor(account?: undefined, config?: LayerswapBitcoinProtocolConfig);
+    /**
+     * Creates a new read-only interface to the layerswap protocol for bitcoin.
+     *
+     * @overload
+     * @param {WalletAccountReadOnlyBtc} account - The wallet account to use to interact with the protocol.
+     * @param {LayerswapBitcoinProtocolConfig} [config] - The layerswap protocol configuration.
+     */
+    constructor(account: WalletAccountReadOnlyBtc, config?: LayerswapBitcoinProtocolConfig);
+    /**
+     * Creates a new interface to the layerswap protocol for bitcoin.
+     *
+     * @overload
+     * @param {WalletAccountBtc} account - The wallet account to use to interact with the protocol.
+     * @param {LayerswapBitcoinProtocolConfig} [config] - The layerswap protocol configuration.
+     */
+    constructor(account: WalletAccountBtc, config?: LayerswapBitcoinProtocolConfig);
     /**
      * Target confirmation block count for fee estimation.
      *
      * @private
      * @type {number}
      */
-    _confirmationTarget;
-    constructor(account?: undefined, config?: LayerswapBitcoinProtocolConfig);
-    constructor(account: WalletAccountReadOnlyBtc, config?: LayerswapBitcoinProtocolConfig);
-    constructor(account: WalletAccountBtc, config?: LayerswapBitcoinProtocolConfig);
-    /** @protected */
-    protected get _nativeTokenSymbol(): string;
-    /**
-     * Maps the account's `config.network` (`bitcoin`/`testnet`/`regtest`) to the Layerswap
-     * network.
-     *
-     * @protected
-     * @returns {Promise<LayerswapNetwork>} The source network.
-     * @throws {ValueError} If Layerswap does not support the network.
-     * @throws {ProviderError} If the Layerswap API fails to return the network catalog.
-     */
-    protected _detectSourceNetwork(): Promise<LayerswapNetwork>;
-    /**
-     * Tests whether the bound account is a writable Bitcoin wallet account (i.e. has a
-     * derived `_account` key pair). Read-only accounts have none. Duck-typed because the
-     * wallet package may resolve to a different copy than this package's own.
-     *
-     * @protected
-     * @param {unknown} account - The bound account.
-     * @returns {boolean} True if the account can sign transactions.
-     */
-    protected _isWritableAccount(account: unknown): boolean;
-    /**
-     * Tests whether the bound account has been disposed. Besides the generic `disposed`
-     * flag, `WalletAccountBtc.dispose()` wipes the master node (`_masterNode`).
-     *
-     * @protected
-     * @param {WalletAccountBtc} account - The bound account.
-     * @returns {boolean} True if the account has been disposed.
-     */
-    protected _isDisposedAccount(account: WalletAccountBtc): boolean;
-    /**
-     * Only native BTC can be deposited from a Bitcoin wallet.
-     *
-     * @protected
-     * @param {LayerswapSwidgeRoute} route - The resolved swidge route.
-     * @throws {InvalidTokenError} If the source token is not native BTC.
-     */
-    protected _assertSwidgeRoute(route: LayerswapSwidgeRoute): void;
-    /**
-     * Approximates the source-chain fee of the deposit transaction.
-     *
-     * @protected
-     * @param {LayerswapSwidgeRoute} route - The resolved swidge route.
-     * @param {bigint} amount - The input amount in satoshis.
-     * @param {string} sourceAddress - The address of the bound account.
-     * @returns {Promise<bigint>} The estimated fee, in satoshis.
-     */
-    protected _quoteSourceGas(route: LayerswapSwidgeRoute, amount: bigint, sourceAddress: string): Promise<bigint>;
+    private _confirmationTarget;
     /**
      * Builds and signs the deposit transaction (deposit output + `OP_RETURN` memo).
      *
      * @protected
      * @param {LayerswapDepositContext} context - The deposit context.
      * @returns {Promise<LayerswapBitcoinSignedPsbt>} The prepared deposit.
-     * @throws {ValueError} If the amount is below the dust limit.
+     * @throws {ValueError} If the deposit action is malformed, or its amount is not above the dust limit.
      * @throws {SwidgeError} If the account has insufficient funds.
-     * @throws {ProviderError} If the deposit action is malformed, or the bitcoin client fails.
+     * @throws {ProviderError} If the bitcoin client fails.
      */
     protected _prepareDeposit({ action, route, fromTokenAmount, options }: LayerswapDepositContext): Promise<LayerswapBitcoinSignedPsbt>;
     /**
@@ -200,20 +114,12 @@ export default class LayerswapProtocolBitcoin extends LayerswapSwidgeProtocol<La
      */
     protected _sendDeposit({ txHex, txid }: LayerswapBitcoinSignedPsbt): Promise<LayerswapBroadcastDeposit>;
     /**
-     * Maps the legacy bridge options onto the swidge options, forwarding the fee rate.
-     *
-     * @protected
-     * @param {LayerswapBitcoinBridgeOptions} options - The bridge options.
-     * @returns {LayerswapBitcoinSwidgeOptions} The swidge options.
-     */
-    protected _toSwidgeOptions(options: LayerswapBitcoinBridgeOptions): LayerswapBitcoinSwidgeOptions;
-    /**
      * Checks that the Layerswap deposit address is a valid address on the account's network.
      *
      * @private
      * @param {string} depositAddress - The Layerswap deposit address.
      * @returns {Promise<void>}
-     * @throws {ProviderError} If Layerswap returned a malformed address, or one of another network.
+     * @throws {ValueError} If the address is malformed, or one of another network.
      */
     private _assertDepositAddress;
     /**
@@ -224,7 +130,7 @@ export default class LayerswapProtocolBitcoin extends LayerswapSwidgeProtocol<La
      * @private
      * @param {string | null | undefined} callData
      * @returns {Buffer}
-     * @throws {ProviderError} If Layerswap's call_data is missing, malformed, or too large for an OP_RETURN output.
+     * @throws {ValueError} If the call_data is missing, malformed, or too large for an OP_RETURN output.
      */
     private _encodeCallDataMemo;
     /**
@@ -246,8 +152,8 @@ export default class LayerswapProtocolBitcoin extends LayerswapSwidgeProtocol<La
      * `publicKey.equals` and partialSig serialisation.
      *
      * @private
-     * @param {Object} node - An HDSigner-compatible BIP-32 node.
-     * @returns {Object} An HDSigner whose publicKey/fingerprint/sign() return Buffers.
+     * @param {HDSigner} node - An HDSigner-compatible BIP-32 node.
+     * @returns {HDSigner} An HDSigner whose publicKey/fingerprint/sign() return Buffers.
      */
     private _toBufferHdSigner;
     /**
@@ -256,8 +162,78 @@ export default class LayerswapProtocolBitcoin extends LayerswapSwidgeProtocol<La
      *
      * @private
      * @param {string} addressStr
-     * @param {*} network
+     * @param {BitcoinNetwork} network
      * @returns {Promise<Buffer>}
      */
     private _getOutputScriptHex;
 }
+export type IWalletAccountReadOnly = import("@tetherto/wdk-wallet").IWalletAccountReadOnly;
+export type WalletAccountBtc = import("@tetherto/wdk-wallet-btc").WalletAccountBtc;
+export type WalletAccountReadOnlyBtc = import("@tetherto/wdk-wallet-btc").WalletAccountReadOnlyBtc;
+export type HDSigner = import("bitcoinjs-lib").HDSigner;
+export type BitcoinNetwork = import("bitcoinjs-lib").Network;
+export type LayerswapNetwork = import("@layerswap/wdk-protocol-swidge-layerswap-core").LayerswapNetwork;
+export type LayerswapProtocolConfig = import("@layerswap/wdk-protocol-swidge-layerswap-core").LayerswapProtocolConfig;
+export type LayerswapSwidgeOptions = import("@layerswap/wdk-protocol-swidge-layerswap-core").LayerswapSwidgeOptions;
+export type LayerswapSwidgeConfig = import("@layerswap/wdk-protocol-swidge-layerswap-core").LayerswapSwidgeConfig;
+export type LayerswapBridgeOptions = import("@layerswap/wdk-protocol-swidge-layerswap-core").LayerswapBridgeOptions;
+export type LayerswapSwidgeRoute = import("@layerswap/wdk-protocol-swidge-layerswap-core").LayerswapSwidgeRoute;
+export type LayerswapDepositContext = import("@layerswap/wdk-protocol-swidge-layerswap-core").LayerswapDepositContext;
+export type LayerswapBroadcastDeposit = import("@layerswap/wdk-protocol-swidge-layerswap-core").LayerswapBroadcastDeposit;
+/**
+ * The layerswap protocol configuration, plus the Bitcoin-specific options.
+ */
+export type LayerswapBitcoinProtocolConfig = LayerswapProtocolConfig & LayerswapSpecificBitcoinProtocolConfig;
+export type LayerswapSpecificBitcoinProtocolConfig = {
+    /**
+     * - Target confirmation block count for fee estimation. Default: 1.
+     */
+    confirmationTarget?: number;
+};
+export type LayerswapSpecificBitcoinOptions = {
+    /**
+     * - Override the fee rate (sat/vB) used for PSBT construction.
+     */
+    feeRate?: number | bigint;
+};
+/**
+ * The layerswap swidge options, plus the Bitcoin-specific options.
+ */
+export type LayerswapBitcoinSwidgeOptions = LayerswapSwidgeOptions & LayerswapSpecificBitcoinOptions;
+/**
+ * The layerswap bridge options, plus the Bitcoin-specific options.
+ */
+export type LayerswapBitcoinBridgeOptions = LayerswapBridgeOptions & LayerswapSpecificBitcoinOptions;
+export type LayerswapBitcoinPsbtParams = {
+    /**
+     * - The Layerswap deposit address.
+     */
+    depositAddress: string;
+    /**
+     * - The amount to deposit (in satoshis).
+     */
+    amount: bigint;
+    /**
+     * - The OP_RETURN payload carrying the swap reference.
+     */
+    memo: Buffer;
+    /**
+     * - The fee rate (sat/vB) to use instead of the estimate.
+     */
+    feeRateOverride?: number | bigint;
+};
+export type LayerswapBitcoinSignedPsbt = {
+    /**
+     * - The signed, finalized transaction (hex).
+     */
+    txHex: string;
+    /**
+     * - The transaction id.
+     */
+    txid: string;
+    /**
+     * - The transaction fee (in satoshis).
+     */
+    fee: bigint;
+};
+import { LayerswapSwidgeProtocol } from '@layerswap/wdk-protocol-swidge-layerswap-core';

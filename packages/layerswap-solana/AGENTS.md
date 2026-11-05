@@ -22,7 +22,7 @@ Layerswap swidge protocol for `@tetherto/wdk-wallet-solana` accounts. `Layerswap
   | `4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY` | `SOLANA_TESTNET` |
 
   Use the rpc client the wallet account was built with (`account._rpc`); never rebuild one from `account._config.provider` — that would ignore the rpc-client and fail-over provider shapes the wallet supports.
-- `_isWritableAccount` / `_isDisposedAccount` — duck-typed (`sendTransaction` + 32-byte `keyPair.publicKey`); a disposed `WalletAccountSolana` erases its private key (`keyPair.privateKey === null`).
+- `_isWritableAccount` — duck-typed (`sendTransaction` + 32-byte `keyPair.publicKey`). Disposal is core's `account.disposed` check.
 - `_assertSwidgeRoute` — `swidge()` requires an rpc (`ProviderRequiredError`).
 - `_quoteSourceGas` — 5000-lamport per-signature fee approximation.
 - `_prepareDeposit` / `_sendDeposit` — Layerswap's `call_data` is a base64-serialised transaction, treated as an unsigned template (like the Layerswap app): it is validated, decoded and decompiled with `@solana/kit` (lookup tables fetched through `account._rpc`), and its blockhash is replaced by a fresh one. The resulting transaction message is quoted (`account.quoteSendTransaction(message)`) and signed + broadcast (`account.sendTransaction(message)`) by the wallet, which rejects it if the fee payer is not the account. `@solana/kit` is the only Solana SDK in `src/` (`@solana/web3.js` is a test-only dependency).

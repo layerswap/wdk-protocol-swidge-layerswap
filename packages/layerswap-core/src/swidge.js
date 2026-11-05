@@ -196,15 +196,13 @@ export function deriveSwidgeStatus (swap) {
  * @param {LayerswapSwapResponse} response
  * @param {LayerswapSwidgeStatusOptions} [options] - Optional chain hints.
  * @returns {LayerswapSwidgeStatusResult}
- * @throws {ProviderError} If the response is missing the swap details.
+ * @throws {ValueError} If the response is missing the swap details.
  * @throws {NoSuchElementError} If the swap does not match the given chain hints.
  */
 export function buildStatusResult (response, options = {}) {
   const swap = response?.swap
   if (!swap || !swap.id) {
-    throw new ProviderError('Layerswap response is missing swap details.', {
-      reason: ProviderErrorReason.INTERNAL_SERVER_ERROR
-    })
+    throw new ValueError('The swap response is missing the swap details.')
   }
 
   if (options.fromChain !== undefined && !matchesChain(swap.source_network, options.fromChain)) {
@@ -304,7 +302,7 @@ export function buildQuoteFees (quote, sourceToken, sourceChain) {
 
   if (quote.service_fee !== undefined && quote.service_fee !== null) {
     fees.push({
-      type: /** @type {'protocol'} */ ('protocol'),
+      type: 'protocol',
       amount: parseDecimal(quote.service_fee, sourceToken.decimals),
       token: sourceToken.symbol,
       ...(sourceChain !== undefined && { chain: sourceChain }),
@@ -315,7 +313,7 @@ export function buildQuoteFees (quote, sourceToken, sourceChain) {
 
   if (quote.blockchain_fee !== undefined && quote.blockchain_fee !== null) {
     fees.push({
-      type: /** @type {'network'} */ ('network'),
+      type: 'network',
       amount: parseDecimal(quote.blockchain_fee, sourceToken.decimals),
       token: sourceToken.symbol,
       ...(sourceChain !== undefined && { chain: sourceChain }),
@@ -328,7 +326,7 @@ export function buildQuoteFees (quote, sourceToken, sourceChain) {
   // per-component breakdown; fall back to the total so the fee is never under-reported.
   if (fees.length === 0 && quote.total_fee !== undefined && quote.total_fee !== null) {
     fees.push({
-      type: /** @type {'protocol'} */ ('protocol'),
+      type: 'protocol',
       amount: parseDecimal(quote.total_fee, sourceToken.decimals),
       token: sourceToken.symbol,
       ...(sourceChain !== undefined && { chain: sourceChain }),
@@ -491,18 +489,18 @@ const SWIDGE_ERROR_NAMES = new Set([
  *   `SwidgeError` with the same reason;
  * - anything else is wrapped in a `ProviderError`, keeping the original error as `cause`.
  *
- * @param {unknown} error - The error raised by the wallet account.
+ * @param {Error} error - The error raised by the wallet account.
  * @returns {Error} The normalized error.
  */
 export function normalizeWalletError (error) {
-  const name = /** @type {any} */ (error)?.name
-  const reason = /** @type {any} */ (error)?.reason
+  const name = error?.name
+  const reason = error?.reason
 
   if (SWIDGE_ERROR_NAMES.has(name)) {
-    return /** @type {Error} */ (error)
+    return error
   }
 
-  const message = /** @type {any} */ (error)?.message ?? String(error)
+  const message = error?.message ?? String(error)
 
   if ((name === 'TransactionError' || name === 'TransferError') && Object.values(SwidgeErrorReason).includes(reason)) {
     return new SwidgeError(message, { reason, cause: error })

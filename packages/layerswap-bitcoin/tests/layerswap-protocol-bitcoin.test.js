@@ -144,8 +144,10 @@ function makeAccount ({
   }
 
   if (disposed) {
-    // Mirrors `WalletAccountBtc.dispose()`, which wipes the keys and unsets `_masterNode`.
+    // Mirrors `WalletAccountBtc.dispose()`, which wipes the keys and unsets `_masterNode`,
+    // plus the WDK `IDisposable.disposed` getter.
     account._masterNode = undefined
+    account.disposed = true
   }
 
   return { account, client, broadcast, listUnspent, estimateFeeFn }
@@ -227,17 +229,17 @@ describe('LayerswapProtocolBitcoin', () => {
       expect(protocol._encodeCallDataMemo('13646;extra').toString('utf8')).toBe('354e;extra')
     })
 
-    test.each([null, undefined, ''])('throws a ProviderError for a missing call_data (%p)', (callData) => {
-      expect(() => protocol._encodeCallDataMemo(callData)).toThrow(ProviderError)
+    test.each([null, undefined, ''])('throws a ValueError for a missing call_data (%p)', (callData) => {
+      expect(() => protocol._encodeCallDataMemo(callData)).toThrow(ValueError)
     })
 
-    test('throws a ProviderError when the sequence part is not numeric', () => {
-      expect(() => protocol._encodeCallDataMemo('not-a-number')).toThrow(ProviderError)
+    test('throws a ValueError when the sequence part is not numeric', () => {
+      expect(() => protocol._encodeCallDataMemo('not-a-number')).toThrow(ValueError)
       expect(() => protocol._encodeCallDataMemo('nan;tail')).toThrow(/numeric sequence/)
     })
 
-    test('throws a ProviderError when encoded payload exceeds 80 bytes', () => {
-      expect(() => protocol._encodeCallDataMemo(`1;${'x'.repeat(90)}`)).toThrow(ProviderError)
+    test('throws a ValueError when encoded payload exceeds 80 bytes', () => {
+      expect(() => protocol._encodeCallDataMemo(`1;${'x'.repeat(90)}`)).toThrow(ValueError)
       expect(() => protocol._encodeCallDataMemo(`1;${'x'.repeat(90)}`)).toThrow(/80-byte/)
     })
   })
@@ -310,13 +312,26 @@ describe('LayerswapProtocolBitcoin', () => {
       expect(result.fee).toBeLessThan(500n)
     })
 
-    test('throws a ValueError when the amount is at or below the dust limit', async () => {
+    test('throws a ValueError, without creating a swap, when the amount is at or below the dust limit', async () => {
       useSwapHandlers(depositAction({ amount: 0.000001 }))
+      const requests = recordRequests(server)
 
-      const error = await new LayerswapProtocolBitcoin(makeAccount().account).swidge({ ...SWIDGE_OPTIONS, fromTokenAmount: 100n }).catch((err) => err)
+      const error = await new LayerswapProtocolBitcoin(makeAccount().account).swidge({ ...SWIDGE_OPTIONS, fromTokenAmount: 294n }).catch((err) => err)
 
       expect(error).toBeInstanceOf(ValueError)
       expect(error.message).toMatch(/dust limit/)
+      expect(requests.filter((request) => request.method === 'POST')).toHaveLength(0)
+    })
+
+    test('throws a ProviderError when Layerswap asks for a deposit at or below the dust limit', async () => {
+      useSwapHandlers(depositAction({ amount: 0.000001 }))
+      const { account, broadcast } = makeAccount()
+
+      const error = await new LayerswapProtocolBitcoin(account).swidge(SWIDGE_OPTIONS).catch((err) => err)
+
+      expect(error).toBeInstanceOf(ProviderError)
+      expect(error.cause).toBeInstanceOf(ValueError)
+      expect(broadcast).not.toHaveBeenCalled()
     })
 
     test.each([
@@ -355,8 +370,11 @@ describe('LayerswapProtocolBitcoin', () => {
       useSwapHandlers(depositAction({ depositAddress }))
       const { account, broadcast } = makeAccount()
 
-      await expect(new LayerswapProtocolBitcoin(account).swidge(SWIDGE_OPTIONS))
-        .rejects.toThrow(`Layerswap returned a malformed Bitcoin deposit address '${depositAddress}'.`)
+      const error = await new LayerswapProtocolBitcoin(account).swidge(SWIDGE_OPTIONS).catch((err) => err)
+
+      expect(error).toBeInstanceOf(ProviderError)
+      expect(error.message).toContain(`Malformed Bitcoin deposit address '${depositAddress}'.`)
+      expect(error.cause).toBeInstanceOf(ValueError)
       expect(broadcast).not.toHaveBeenCalled()
     })
 
@@ -429,7 +447,7 @@ describe('LayerswapProtocolBitcoin', () => {
       await expect(new LayerswapProtocolBitcoin(account).swidge(SWIDGE_OPTIONS)).rejects.toThrow(AccountRequiredError)
     })
 
-    test('throws a DisposalError once the master node has been wiped', async () => {
+    test('throws a DisposalError once the account has been disposed', async () => {
       const { account, broadcast } = makeAccount({ disposed: true })
 
       await expect(new LayerswapProtocolBitcoin(account).swidge(SWIDGE_OPTIONS)).rejects.toThrow(DisposalError)

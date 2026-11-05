@@ -14,10 +14,8 @@
 
 'use strict'
 
-import { ProviderErrorReason } from '@tetherto/wdk-wallet'
 import {
   InvalidTokenError,
-  ProviderError,
   SwidgeError,
   SwidgeErrorReason,
   ValueError
@@ -31,8 +29,13 @@ import {
   resolveNetworkByName
 } from '@layerswap/wdk-protocol-swidge-layerswap-core'
 
+/** @typedef {import('@tetherto/wdk-wallet').IWalletAccountReadOnly} IWalletAccountReadOnly */
+
 /** @typedef {import('@tetherto/wdk-wallet-btc').WalletAccountBtc} WalletAccountBtc */
 /** @typedef {import('@tetherto/wdk-wallet-btc').WalletAccountReadOnlyBtc} WalletAccountReadOnlyBtc */
+
+/** @typedef {import('bitcoinjs-lib').HDSigner} HDSigner */
+/** @typedef {import('bitcoinjs-lib').Network} BitcoinNetwork */
 
 /** @typedef {import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapNetwork} LayerswapNetwork */
 /** @typedef {import('@layerswap/wdk-protocol-swidge-layerswap-core').LayerswapProtocolConfig} LayerswapProtocolConfig */
@@ -171,7 +174,13 @@ export default class LayerswapProtocolBitcoin extends LayerswapSwidgeProtocol {
     this._confirmationTarget = config.confirmationTarget ?? 1
   }
 
-  /** @protected */
+  /**
+   * The symbol of the bitcoin native token, used for fee entries when the Layerswap network
+   * catalog does not report it.
+   *
+   * @protected
+   * @type {string}
+   */
   get _nativeTokenSymbol () {
     return 'BTC'
   }
@@ -196,39 +205,32 @@ export default class LayerswapProtocolBitcoin extends LayerswapSwidgeProtocol {
    * wallet package may resolve to a different copy than this package's own.
    *
    * @protected
-   * @param {unknown} account - The bound account.
+   * @param {IWalletAccountReadOnly} account - The bound account.
    * @returns {boolean} True if the account can sign transactions.
    */
   _isWritableAccount (account) {
-    if (!account || typeof account !== 'object') return false
-    return !!(account._account && account._account.publicKey)
+    return Boolean(account._account && account._account.publicKey)
   }
 
   /**
-   * Tests whether the bound account has been disposed. Besides the generic `disposed`
-   * flag, `WalletAccountBtc.dispose()` wipes the master node (`_masterNode`).
-   *
-   * @protected
-   * @param {WalletAccountBtc} account - The bound account.
-   * @returns {boolean} True if the account has been disposed.
-   */
-  _isDisposedAccount (account) {
-    if (super._isDisposedAccount(account)) return true
-    const masterNode = account._masterNode
-    return !(masterNode && masterNode.fingerprint)
-  }
-
-  /**
-   * Only native BTC can be deposited from a Bitcoin wallet.
+   * Only native BTC above the account's dust limit can be deposited from a Bitcoin wallet.
+   * Checked before the swap is created, so an invalid amount has no side effects.
    *
    * @protected
    * @param {LayerswapSwidgeRoute} route - The resolved swidge route.
+   * @param {bigint} fromTokenAmount - The input amount in satoshis.
+   * @throws {ValueError} If the amount is not above the dust limit.
    * @throws {InvalidTokenError} If the source token is not native BTC.
    */
-  _assertSwidgeRoute (route) {
+  _assertSwidgeRoute (route, fromTokenAmount) {
     const { sourceToken } = route
     if (sourceToken.contract) {
       throw new InvalidTokenError(`Layerswap Bitcoin source token must be native BTC, got '${sourceToken.symbol}' with contract '${sourceToken.contract}'. Tokens (BRC-20, Runes, etc.) are not supported.`)
+    }
+
+    const dustLimit = this._account._dustLimit
+    if (dustLimit !== undefined && fromTokenAmount <= BigInt(dustLimit)) {
+      throw new ValueError(`The amount must be bigger than the dust limit (= ${dustLimit}).`)
     }
   }
 
@@ -251,15 +253,13 @@ export default class LayerswapProtocolBitcoin extends LayerswapSwidgeProtocol {
    * @protected
    * @param {LayerswapDepositContext} context - The deposit context.
    * @returns {Promise<LayerswapBitcoinSignedPsbt>} The prepared deposit.
-   * @throws {ValueError} If the amount is below the dust limit.
+   * @throws {ValueError} If the deposit action is malformed, or its amount is not above the dust limit.
    * @throws {SwidgeError} If the account has insufficient funds.
-   * @throws {ProviderError} If the deposit action is malformed, or the bitcoin client fails.
+   * @throws {ProviderError} If the bitcoin client fails.
    */
   async _prepareDeposit ({ action, route, fromTokenAmount, options }) {
     if (typeof action.to_address !== 'string' || action.to_address.length === 0) {
-      throw new ProviderError('Layerswap deposit action for Bitcoin is missing to_address; the deposit transaction cannot be built.', {
-        reason: ProviderErrorReason.INTERNAL_SERVER_ERROR
-      })
+      throw new ValueError('The Bitcoin deposit action is missing to_address; the deposit transaction cannot be built.')
     }
 
     await this._assertDepositAddress(action.to_address)
@@ -270,7 +270,7 @@ export default class LayerswapProtocolBitcoin extends LayerswapSwidgeProtocol {
       depositAddress: action.to_address,
       amount: this._parseDepositAmount(action.amount, fromTokenAmount, route.sourceToken.decimals),
       memo: this._encodeCallDataMemo(action.call_data),
-      feeRateOverride: /** @type {LayerswapBitcoinSwidgeOptions} */ (options).feeRate
+      feeRateOverride: options.feeRate
     })
   }
 
@@ -307,16 +307,13 @@ export default class LayerswapProtocolBitcoin extends LayerswapSwidgeProtocol {
    * @private
    * @param {string} depositAddress - The Layerswap deposit address.
    * @returns {Promise<void>}
-   * @throws {ProviderError} If Layerswap returned a malformed address, or one of another network.
+   * @throws {ValueError} If the address is malformed, or one of another network.
    */
   async _assertDepositAddress (depositAddress) {
     try {
       await this._getOutputScriptHex(depositAddress, this._account._network)
     } catch (error) {
-      throw new ProviderError(`Layerswap returned a malformed Bitcoin deposit address '${depositAddress}'.`, {
-        reason: ProviderErrorReason.INTERNAL_SERVER_ERROR,
-        cause: error
-      })
+      throw new ValueError(`Malformed Bitcoin deposit address '${depositAddress}'.`, { cause: error })
     }
   }
 
@@ -328,13 +325,11 @@ export default class LayerswapProtocolBitcoin extends LayerswapSwidgeProtocol {
    * @private
    * @param {string | null | undefined} callData
    * @returns {Buffer}
-   * @throws {ProviderError} If Layerswap's call_data is missing, malformed, or too large for an OP_RETURN output.
+   * @throws {ValueError} If the call_data is missing, malformed, or too large for an OP_RETURN output.
    */
   _encodeCallDataMemo (callData) {
     if (callData === null || callData === undefined || callData === '') {
-      throw new ProviderError('Layerswap deposit action for Bitcoin is missing call_data; the deposit cannot be matched to the swap without its OP_RETURN reference.', {
-        reason: ProviderErrorReason.INTERNAL_SERVER_ERROR
-      })
+      throw new ValueError('The Bitcoin deposit action is missing call_data; the deposit cannot be matched to the swap without its OP_RETURN reference.')
     }
 
     // Mirrors the Layerswap web app (packages/wallets/adapters/bitcoin/src/
@@ -350,17 +345,13 @@ export default class LayerswapProtocolBitcoin extends LayerswapSwidgeProtocol {
     try {
       seqHex = BigInt(seq).toString(16)
     } catch (_) {
-      throw new ProviderError(`Layerswap call_data for Bitcoin must start with a numeric sequence (got '${callData}'); the web app encodes it via BigInt(seq).toString(16).`, {
-        reason: ProviderErrorReason.INTERNAL_SERVER_ERROR
-      })
+      throw new ValueError(`The Bitcoin call_data must start with a numeric sequence (got '${callData}'); the web app encodes it via BigInt(seq).toString(16).`)
     }
 
     const bytes = Buffer.from(seqHex + tail, 'utf8')
 
     if (bytes.length > OP_RETURN_MAX_BYTES) {
-      throw new ProviderError(`Encoded OP_RETURN memo is ${bytes.length} bytes; exceeds the ${OP_RETURN_MAX_BYTES}-byte standardness limit.`, {
-        reason: ProviderErrorReason.INTERNAL_SERVER_ERROR
-      })
+      throw new ValueError(`Encoded OP_RETURN memo is ${bytes.length} bytes; exceeds the ${OP_RETURN_MAX_BYTES}-byte standardness limit.`)
     }
 
     return bytes
@@ -510,8 +501,8 @@ export default class LayerswapProtocolBitcoin extends LayerswapSwidgeProtocol {
    * `publicKey.equals` and partialSig serialisation.
    *
    * @private
-   * @param {Object} node - An HDSigner-compatible BIP-32 node.
-   * @returns {Object} An HDSigner whose publicKey/fingerprint/sign() return Buffers.
+   * @param {HDSigner} node - An HDSigner-compatible BIP-32 node.
+   * @returns {HDSigner} An HDSigner whose publicKey/fingerprint/sign() return Buffers.
    */
   _toBufferHdSigner (node) {
     const wrap = this._toBufferHdSigner.bind(this)
@@ -529,7 +520,7 @@ export default class LayerswapProtocolBitcoin extends LayerswapSwidgeProtocol {
    *
    * @private
    * @param {string} addressStr
-   * @param {*} network
+   * @param {BitcoinNetwork} network
    * @returns {Promise<Buffer>}
    */
   async _getOutputScriptHex (addressStr, network) {

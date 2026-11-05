@@ -282,6 +282,8 @@ describe('LayerswapProtocolEvm', () => {
 
       const account = new WalletAccountEvm(SEED_PHRASE, "0'/0/0", { provider: makeEip1193Provider() })
       account.dispose()
+      // WDK `IDisposable.disposed`, not implemented yet by the wallet account.
+      Object.defineProperty(account, 'disposed', { value: true })
 
       await expect(new LayerswapProtocolEvm(account).swidge(SWIDGE_OPTIONS)).rejects.toThrow(DisposalError)
       expect(requests).toHaveLength(0)

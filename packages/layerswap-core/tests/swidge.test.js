@@ -175,9 +175,9 @@ describe('buildStatusResult', () => {
     })
   })
 
-  test('throws a ProviderError when the swap is missing', () => {
-    expect(() => buildStatusResult({})).toThrow(ProviderError)
-    expect(() => buildStatusResult({})).toThrow('missing swap details')
+  test('throws a ValueError when the swap is missing', () => {
+    expect(() => buildStatusResult({})).toThrow(ValueError)
+    expect(() => buildStatusResult({})).toThrow('missing the swap details')
   })
 
   describe('chain hints', () => {

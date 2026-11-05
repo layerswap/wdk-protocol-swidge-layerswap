@@ -79,7 +79,7 @@ class TestProtocol extends LayerswapSwidgeProtocol {
   }
 
   _isWritableAccount (account) {
-    return typeof account?.sendTransaction === 'function'
+    return typeof account.sendTransaction === 'function'
   }
 
   async _quoteSourceGas () {
@@ -169,6 +169,21 @@ describe('LayerswapSwidgeProtocol', () => {
       })
     })
 
+    test.each([
+      ['omitted', undefined],
+      ['equal to the source chain', 'SOURCE_MAINNET']
+    ])('quotes a same-chain swap when toChain is %s', async (_, toChain) => {
+      server.use(layerswapApi.networks(NETWORKS), layerswapApi.quote())
+      const requests = recordRequests(server)
+
+      await new TestProtocol(makeAccount()).quoteSwidge({ ...SWIDGE_OPTIONS, toChain, toToken: 'NATIVE' })
+
+      const { searchParams } = new URL(requests.find((request) => request.url.includes('/api/v2/quote')).url)
+      expect(searchParams.get('source_network')).toBe('SOURCE_MAINNET')
+      expect(searchParams.get('destination_network')).toBe('SOURCE_MAINNET')
+      expect(searchParams.get('destination_token')).toBe('NATIVE')
+    })
+
     test('sends the route, amount, source address and slippage (as a percent string) to Layerswap', async () => {
       server.use(layerswapApi.networks(NETWORKS), layerswapApi.quote())
       const requests = recordRequests(server)
@@ -212,8 +227,8 @@ describe('LayerswapSwidgeProtocol', () => {
       ['exact-out options', { toTokenAmount: 1n, fromTokenAmount: undefined }, 'exact-in'],
       ['a missing fromTokenAmount', { fromTokenAmount: undefined }, 'fromTokenAmount'],
       ['a non-integer fromTokenAmount', { fromTokenAmount: '1.5' }, "'fromTokenAmount' option must be an integer"],
-      ['a missing toChain (same-chain swap)', { toChain: undefined }, 'same-chain'],
-      ['a toChain equal to the source chain', { toChain: 'SOURCE_MAINNET' }, 'cannot be equal'],
+      ['a same-chain swap of a token into itself (toChain omitted)', { toChain: undefined }, 'cannot be the same'],
+      ['a same-chain swap of a token into itself', { toChain: 'SOURCE_MAINNET', toToken: 'USDC' }, 'cannot be the same'],
       ['an unsupported network', { toChain: 'UNKNOWN_MAINNET' }, "does not support network 'UNKNOWN_MAINNET'"],
       ['an invalid slippage', { slippage: -1 }, 'Invalid slippage']
     ])('throws a ValueError for %s', async (_, overrides, message) => {
@@ -363,13 +378,6 @@ describe('LayerswapSwidgeProtocol', () => {
       expect(account.sendTransaction).not.toHaveBeenCalled()
     })
 
-    test('throws a DisposalError for accounts whose private key has been erased', async () => {
-      const account = makeAccount()
-      account.keyPair = { publicKey: new Uint8Array(32), privateKey: null }
-
-      await expect(new TestProtocol(account).swidge(SWIDGE_OPTIONS)).rejects.toThrow(DisposalError)
-      expect(account.sendTransaction).not.toHaveBeenCalled()
-    })
 
     test('throws a SwidgeError (COULD_NOT_MET_THRESHOLD) when the quoted minimum output is below minAmountOut', async () => {
       server.use(
@@ -442,6 +450,25 @@ describe('LayerswapSwidgeProtocol', () => {
 
       expect(error).toBeInstanceOf(ProviderError)
       expect(error.reason).toBe(ProviderErrorReason.INTERNAL_SERVER_ERROR)
+    })
+
+    test('masks a deposit the VM hook rejects as invalid as a ProviderError', async () => {
+      useSwapHandlers({ depositActions: [{ ...DEPOSIT_ACTION, amount_in_base_units: '100000001' }] })
+
+      class ParsingProtocol extends TestProtocol {
+        async _prepareDeposit (context) {
+          this._parseDepositAmount(context.action.amount_in_base_units, context.fromTokenAmount)
+          return super._prepareDeposit(context)
+        }
+      }
+
+      const account = makeAccount()
+      const error = await new ParsingProtocol(account).swidge(SWIDGE_OPTIONS).catch((err) => err)
+
+      expect(error).toBeInstanceOf(ProviderError)
+      expect(error.reason).toBe(ProviderErrorReason.INTERNAL_SERVER_ERROR)
+      expect(error.cause).toBeInstanceOf(ValueError)
+      expect(account.sendTransaction).not.toHaveBeenCalled()
     })
 
     test('wraps unexpected wallet failures in a ProviderError', async () => {
@@ -528,10 +555,35 @@ describe('LayerswapSwidgeProtocol', () => {
   })
 
   describe('swap', () => {
-    test('always throws: Layerswap does not support same-chain swaps', async () => {
+    test('swaps on the source chain through the inherited swap(), paying out to the account', async () => {
+      useSwapHandlers()
+      const requests = recordRequests(server)
+
+      const result = await new TestProtocol(makeAccount()).swap({ tokenIn: 'USDC', tokenOut: 'NATIVE', tokenInAmount: 100_000_000n })
+
+      expect(result).toMatchObject({ hash: 'swap-id-1', tokenInAmount: 100_000_000n })
+
+      const createSwap = requests.find((request) => request.method === 'POST' && request.url.endsWith('/api/v2/swaps'))
+      expect(await createSwap.json()).toMatchObject({
+        source_network: 'SOURCE_MAINNET',
+        source_token: 'USDC',
+        destination_network: 'SOURCE_MAINNET',
+        destination_token: 'NATIVE',
+        destination_address: USER_ADDRESS
+      })
+    })
+
+    test('quotes a same-chain swap through the inherited quoteSwap()', async () => {
+      server.use(layerswapApi.networks(NETWORKS), layerswapApi.quote())
+
+      await expect(new TestProtocol(makeAccount()).quoteSwap({ tokenIn: 'USDC', tokenOut: 'NATIVE', tokenInAmount: 100_000_000n }))
+        .resolves.toMatchObject({ tokenInAmount: 100_000_000n })
+    })
+
+    test('throws a ValueError for a swap of a token into itself', async () => {
       server.use(layerswapApi.networks(NETWORKS))
 
-      await expect(new TestProtocol(makeAccount()).swap({ tokenIn: 'USDC', tokenOut: 'NATIVE', tokenInAmount: 1n }))
+      await expect(new TestProtocol(makeAccount()).swap({ tokenIn: 'USDC', tokenOut: 'USDC', tokenInAmount: 1n }))
         .rejects.toThrow(ValueError)
     })
   })
@@ -580,6 +632,16 @@ describe('LayerswapSwidgeProtocol', () => {
       server.use(layerswapApi.error('get', '/api/v2/swaps/:id', 400, 'UNEXPECTED_ERROR', 'Swap missing is not found'))
 
       await expect(new TestProtocol(undefined).getSwidgeStatus('missing')).rejects.toThrow(NoSuchElementError)
+    })
+
+    test('throws a ProviderError when Layerswap returns no swap details', async () => {
+      server.use(http.get(`${API_URL}/api/v2/swaps/swap-id-1`, () => HttpResponse.json({ data: {} })))
+
+      const error = await new TestProtocol(undefined).getSwidgeStatus('swap-id-1').catch((err) => err)
+
+      expect(error).toBeInstanceOf(ProviderError)
+      expect(error.reason).toBe(ProviderErrorReason.INTERNAL_SERVER_ERROR)
+      expect(error.cause).toBeInstanceOf(ValueError)
     })
 
     test('throws a ValueError for an empty id', async () => {
@@ -710,8 +772,24 @@ describe('LayerswapSwidgeProtocol', () => {
       ['zero', '0', undefined],
       ['zero decimal', 0, 6],
       ['above the requested amount', '100000001', undefined]
-    ])('throws a ProviderError when %s', (_, value, decimals) => {
-      expect(() => protocol._parseDepositAmount(value, 100_000_000n, decimals)).toThrow(ProviderError)
+    ])('throws a ValueError when %s', (_, value, decimals) => {
+      expect(() => protocol._parseDepositAmount(value, 100_000_000n, decimals)).toThrow(ValueError)
+    })
+  })
+
+  describe('deposit action', () => {
+    const protocol = new TestProtocol(undefined)
+
+    test('picks the wallet-flow deposit action', () => {
+      expect(protocol._pickWalletDepositAction([{ ...DEPOSIT_ACTION, type: 'manual_transfer' }, DEPOSIT_ACTION])).toBe(DEPOSIT_ACTION)
+    })
+
+    test.each([
+      ['missing', undefined],
+      ['empty', []],
+      ['only manual', [{ ...DEPOSIT_ACTION, type: 'manual_transfer' }]]
+    ])('throws a ValueError when the deposit actions are %s', (_, depositActions) => {
+      expect(() => protocol._pickWalletDepositAction(depositActions)).toThrow(ValueError)
     })
   })
 

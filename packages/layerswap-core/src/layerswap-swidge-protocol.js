@@ -42,6 +42,9 @@ import {
   toBigIntOption
 } from './swidge.js'
 
+/** @typedef {import('@tetherto/wdk-wallet').IWalletAccount} IWalletAccount */
+/** @typedef {import('@tetherto/wdk-wallet').IWalletAccountReadOnly} IWalletAccountReadOnly */
+
 /** @typedef {import('@tetherto/wdk-wallet/protocols').SwidgeProtocolConfig} SwidgeProtocolConfig */
 /** @typedef {import('@tetherto/wdk-wallet/protocols').SwidgeOptions} SwidgeOptions */
 /** @typedef {import('@tetherto/wdk-wallet/protocols').SwidgeQuote} SwidgeQuote */
@@ -196,18 +199,22 @@ import {
  * @property {bigint} bridgeFee - The included fees (Layerswap's cut), in source-token base units.
  */
 
+// The Layerswap deposit action type the wallet signs and broadcasts itself.
+const WALLET_DEPOSIT_ACTION_TYPE = 'transfer'
+
 /**
  * Chain-agnostic WDK swidge protocol over the Layerswap public API. Every VM package
  * (`layerswap-evm`, `layerswap-solana`, …) extends it and only implements what is
  * specific to its chain family:
  *
  * - `_detectSourceNetwork()` — the Layerswap network the wallet account is connected to;
- * - optionally `_isWritableAccount(account)` / `_isDisposedAccount(account)` — stricter
- *   account checks than the default `sendTransaction` / `disposed` duck-typing;
+ * - optionally `_isWritableAccount(account)` — a stricter writable-account check than the
+ *   default `sendTransaction` duck-typing;
  * - `_prepareDeposit(context)` / `_sendDeposit(deposit, config)` — build and broadcast the
  *   source-chain deposit described by the Layerswap deposit action;
  * - optionally `_quoteSourceGas(route, amount, sourceAddress)` — the estimated source-chain
- *   gas included in quotes, and `_assertSwidgeRoute(route)` — VM-specific route checks.
+ *   gas included in quotes, and `_assertSwidgeRoute(route, fromTokenAmount)` — VM-specific
+ *   route checks.
  *
  * Unlike on-chain bridges this protocol is HTTP-orchestrated:
  *   1. POST /api/v2/swaps to create a swap and receive deposit instructions.
@@ -227,16 +234,33 @@ import {
  * Errors honour the `ISwidgeProtocol` throw contract of `@tetherto/wdk-wallet/protocols`.
  *
  * @abstract
- * @template {LayerswapSwidgeOptions} [O=LayerswapSwidgeOptions] - The swidge options.
- * @template {LayerswapSwidgeConfig} [C=LayerswapSwidgeConfig] - The swidge execution configuration.
- * @template {LayerswapBridgeOptions} [B=LayerswapBridgeOptions] - The bridge options.
- * @template {LayerswapBridgeConfig} [BC=LayerswapBridgeConfig] - The bridge execution configuration.
+ * @template {LayerswapSwidgeOptions} [TSwidgeOptions=LayerswapSwidgeOptions] - The swidge options.
+ * @template {LayerswapSwidgeConfig} [TSwidgeConfig=LayerswapSwidgeConfig] - The swidge execution configuration.
+ * @template {LayerswapBridgeOptions} [TBridgeOptions=LayerswapBridgeOptions] - The bridge options.
+ * @template {LayerswapBridgeConfig} [TBridgeConfig=LayerswapBridgeConfig] - The bridge execution configuration.
  */
 export default class LayerswapSwidgeProtocol extends SwidgeProtocol {
   /**
-   * Creates a new layerswap swidge protocol.
+   * Creates a new swidge protocol for chain/token discovery only, without a wallet account.
    *
-   * @param {any} [account] - The wallet account to use to interact with the protocol.
+   * @overload
+   * @param {undefined} [account] - No account; only discovery and `fromChain`-scoped quotes work.
+   * @param {LayerswapProtocolConfig} [config] - The layerswap protocol configuration.
+   */
+
+  /**
+   * Creates a new read-only interface to the layerswap protocol.
+   *
+   * @overload
+   * @param {IWalletAccountReadOnly} account - The wallet account to use to interact with the protocol.
+   * @param {LayerswapProtocolConfig} [config] - The layerswap protocol configuration.
+   */
+
+  /**
+   * Creates a new interface to the layerswap protocol.
+   *
+   * @overload
+   * @param {IWalletAccount} account - The wallet account to use to interact with the protocol.
    * @param {LayerswapProtocolConfig} [config] - The layerswap protocol configuration.
    */
   constructor (account, config = {}) {
@@ -251,6 +275,8 @@ export default class LayerswapSwidgeProtocol extends SwidgeProtocol {
     this._config = config
 
     /**
+     * The layerswap api client.
+     *
      * @protected
      * @type {LayerswapApiClient}
      */
@@ -269,7 +295,7 @@ export default class LayerswapSwidgeProtocol extends SwidgeProtocol {
    * When the protocol has an account bound, the quote includes a non-included
    * 'network' fee entry with the estimated source-chain gas (in native units).
    *
-   * @param {O} options - The swidge options.
+   * @param {TSwidgeOptions} options - The swidge options.
    * @returns {Promise<SwidgeQuote>} The quoted swidge details.
    * @throws {ValueError} If the swidge options are not valid, or Layerswap does not support the route.
    * @throws {InvalidTokenError} If the from or to tokens are not supported by Layerswap.
@@ -324,8 +350,8 @@ export default class LayerswapSwidgeProtocol extends SwidgeProtocol {
    * Resolves once the deposit has been broadcast. Layerswap finishes the
    * destination-chain payout asynchronously; track it with `getSwidgeStatus(result.id)`.
    *
-   * @param {O} options - The swidge options.
-   * @param {C} [config] - Optional execution configuration.
+   * @param {TSwidgeOptions} options - The swidge options.
+   * @param {TSwidgeConfig} [config] - Optional execution configuration.
    * @returns {Promise<SwidgeResult>} The swidge execution result. `id` is the Layerswap swap
    *   id (use it with `getSwidgeStatus`); `hash` is the source-chain deposit transaction hash.
    * @throws {AccountRequiredError} If the protocol has not been initialized with a non read-only account.
@@ -338,11 +364,11 @@ export default class LayerswapSwidgeProtocol extends SwidgeProtocol {
    * @throws {MaximumFeeExceededError} If the costs exceed the 'bridgeMaxFee', 'maxNetworkFeeBps' or 'maxProtocolFeeBps' options.
    */
   async swidge (options, config) {
-    if (!this._isWritableAccount(this._account)) {
+    if (!this._account || !this._isWritableAccount(this._account)) {
       throw new AccountRequiredError("The 'swidge(options)' method requires the protocol to be initialized with a non read-only account.")
     }
 
-    if (this._isDisposedAccount(this._account)) {
+    if (this._account.disposed) {
       throw new DisposalError("The 'swidge(options)' method requires the protocol to be initialized with a non disposed account.")
     }
 
@@ -358,7 +384,7 @@ export default class LayerswapSwidgeProtocol extends SwidgeProtocol {
       maxProtocolFeeBps: toBigIntOption(merged.maxProtocolFeeBps, 'maxProtocolFeeBps')
     }
 
-    this._assertSwidgeRoute(route)
+    this._assertSwidgeRoute(route, fromTokenAmount)
 
     const { swap, action, quote } = await this._createSwap(options, route, fromTokenAmount)
 
@@ -377,7 +403,10 @@ export default class LayerswapSwidgeProtocol extends SwidgeProtocol {
       throw new MaximumFeeExceededError('Exceeded maximum fee cost for bridge operation.')
     }
 
+    // The deposit action comes from Layerswap: a deposit the hook rejects as invalid is a
+    // malformed Layerswap response.
     const deposit = await this._prepareDeposit({ action, route, fromTokenAmount, options, config })
+      .catch((error) => { throw this._toProviderError(error) })
 
     if (deposit.fee !== undefined) {
       fees.push(this._buildGasFee(deposit.fee, route.sourceNetwork))
@@ -427,7 +456,12 @@ export default class LayerswapSwidgeProtocol extends SwidgeProtocol {
     }
 
     const response = await this._client.getSwap(id)
-    return buildStatusResult(response, options)
+
+    try {
+      return buildStatusResult(response, options)
+    } catch (error) {
+      throw this._toProviderError(error)
+    }
   }
 
   /**
@@ -466,8 +500,8 @@ export default class LayerswapSwidgeProtocol extends SwidgeProtocol {
    * it is the total fee Layerswap deducts from the source amount. `fee` is the
    * source-chain gas cost in native units. Do not sum them.
    *
-   * @param {B} options - The bridge's options.
-   * @param {BC} [config] - Optional execution configuration, including the 'bridgeMaxFee' option.
+   * @param {TBridgeOptions} options - The bridge's options.
+   * @param {TBridgeConfig} [config] - Optional execution configuration, including the 'bridgeMaxFee' option.
    * @returns {Promise<LayerswapBridgeResult>} The bridge's result, augmented with the Layerswap swap id.
    * @throws {AccountRequiredError} If the protocol has not been initialized with a non read-only account.
    * @throws {DisposalError} If the account has been disposed.
@@ -480,7 +514,7 @@ export default class LayerswapSwidgeProtocol extends SwidgeProtocol {
    */
   async bridge (options, config) {
     try {
-      const result = await this.swidge(this._toSwidgeOptions(options), /** @type {C} */ (config))
+      const result = await this.swidge(this._toSwidgeOptions(options), config)
 
       return {
         hash: result.hash,
@@ -503,7 +537,7 @@ export default class LayerswapSwidgeProtocol extends SwidgeProtocol {
    * estimated source-chain gas in native units; `bridgeFee` is Layerswap's total fee
    * in source-token base units. See `bridge()` for the semantics.
    *
-   * @param {B} options - The bridge's options.
+   * @param {TBridgeOptions} options - The bridge's options.
    * @returns {Promise<Omit<LayerswapBridgeResult, 'hash' | 'swapId'>>} The bridge's quotes.
    * @throws {ValueError} If the bridge options are not valid, or Layerswap does not support the route.
    * @throws {InvalidTokenError} If the token is not supported by Layerswap.
@@ -618,26 +652,24 @@ export default class LayerswapSwidgeProtocol extends SwidgeProtocol {
    * positive and does not exceed the requested input amount.
    *
    * @protected
-   * @param {unknown} value - The amount, in base units, or a decimal amount when 'decimals' is given.
+   * @param {string | number | bigint} value - The amount, in base units, or a decimal amount when 'decimals' is given.
    * @param {bigint} fromTokenAmount - The requested input amount, in source-token base units.
    * @param {number} [decimals] - The decimals of a decimal amount.
    * @returns {bigint} The deposit amount, in source-token base units.
-   * @throws {ProviderError} If the amount is missing, malformed, or out of range.
+   * @throws {ValueError} If the amount is missing, malformed, or out of range.
    */
   _parseDepositAmount (value, fromTokenAmount, decimals) {
     let amount
     try {
       amount = decimals === undefined
-        ? BigInt(/** @type {any} */ (value))
-        : parseDecimal(/** @type {any} */ (value), decimals)
+        ? BigInt(value)
+        : parseDecimal(value, decimals)
     } catch (_) {
       amount = undefined
     }
 
     if (amount === undefined || amount <= 0n || amount > fromTokenAmount) {
-      throw new ProviderError(`Layerswap returned an invalid deposit amount '${value}' for a requested amount of ${fromTokenAmount} base units.`, {
-        reason: ProviderErrorReason.INTERNAL_SERVER_ERROR
-      })
+      throw new ValueError(`Invalid deposit amount '${value}' for a requested amount of ${fromTokenAmount} base units.`)
     }
 
     return amount
@@ -651,37 +683,24 @@ export default class LayerswapSwidgeProtocol extends SwidgeProtocol {
    * override it when their accounts need a stricter check.
    *
    * @protected
-   * @param {unknown} account - The bound account.
+   * @param {IWalletAccountReadOnly} account - The bound account.
    * @returns {boolean} True if the account can sign and send transactions.
    */
   _isWritableAccount (account) {
-    return Boolean(account && typeof account === 'object' && typeof account.sendTransaction === 'function')
+    return typeof account.sendTransaction === 'function'
   }
 
   /**
-   * Tests whether the bound (writable) account has been disposed: either it reports so
-   * through the WDK `IDisposable.disposed` getter, or its private key has been erased.
-   * WDK wallet accounts do not implement `disposed` yet, but their `dispose()` wipes the
-   * private key, which `keyPair.privateKey` then reports as `null`. VM implementations
-   * override it when their accounts need a stricter check.
-   *
-   * @protected
-   * @param {any} account - The bound account.
-   * @returns {boolean} True if the account has been disposed.
-   */
-  _isDisposedAccount (account) {
-    return account.disposed === true || account.keyPair?.privateKey === null
-  }
-
-  /**
-   * Runs VM-specific checks on the resolved route before a swap is created.
+   * Runs VM-specific checks on the resolved route and input amount before a swap is created.
    *
    * @protected
    * @param {LayerswapSwidgeRoute} route - The resolved swidge route.
+   * @param {bigint} fromTokenAmount - The input amount in source-token base units.
+   * @throws {ValueError} If the input amount cannot be deposited from this VM (e.g. below its dust limit).
    * @throws {InvalidTokenError} If the source token cannot be deposited from this VM.
    * @throws {ProviderRequiredError} If the account is not connected to a provider.
    */
-  _assertSwidgeRoute (route) { }
+  _assertSwidgeRoute (route, fromTokenAmount) { }
 
   /**
    * Estimates the source-chain gas of the deposit, for quotes. Implementations return
@@ -704,7 +723,8 @@ export default class LayerswapSwidgeProtocol extends SwidgeProtocol {
    * @protected
    * @param {LayerswapDepositContext} context - The deposit context.
    * @returns {Promise<LayerswapPreparedDeposit>} The prepared deposit.
-   * @throws {ProviderError} If the deposit action is malformed, or the provider fails.
+   * @throws {ValueError} If the deposit action is malformed.
+   * @throws {ProviderError} If the provider fails.
    * @throws {SwidgeError} If the account has insufficient funds.
    */
   async _prepareDeposit (context) {
@@ -717,7 +737,7 @@ export default class LayerswapSwidgeProtocol extends SwidgeProtocol {
    * @abstract
    * @protected
    * @param {LayerswapPreparedDeposit} deposit - The prepared deposit.
-   * @param {C} [config] - The swidge execution configuration.
+   * @param {TSwidgeConfig} [config] - The swidge execution configuration.
    * @returns {Promise<LayerswapBroadcastDeposit>} The broadcast deposit.
    * @throws {ProviderError} If the provider fails to broadcast the deposit.
    * @throws {SwidgeError} If the account has insufficient funds.
@@ -743,11 +763,11 @@ export default class LayerswapSwidgeProtocol extends SwidgeProtocol {
    * `slippage` is a percent string ('0.5' = 0.5%); swidge takes a decimal (0.005).
    *
    * @protected
-   * @param {B} options - The bridge options.
-   * @returns {O} The swidge options.
+   * @param {TBridgeOptions} options - The bridge options.
+   * @returns {TSwidgeOptions} The swidge options.
    */
   _toSwidgeOptions (options) {
-    return /** @type {O} */ ({
+    return {
       fromToken: options.token,
       toToken: options.destinationToken,
       toChain: options.targetChain,
@@ -758,7 +778,7 @@ export default class LayerswapSwidgeProtocol extends SwidgeProtocol {
       refuel: options.refuel,
       referenceId: options.referenceId,
       ...(options.slippage !== undefined && { slippage: Number(options.slippage) / 100 })
-    })
+    }
   }
 
   /**
@@ -841,15 +861,14 @@ export default class LayerswapSwidgeProtocol extends SwidgeProtocol {
 
     const sourceToken = resolveToken(sourceNetwork, options.fromToken)
 
-    if (options.toChain === undefined) {
-      throw new ValueError("Layerswap does not support same-chain swaps. The 'toChain' option is required and must differ from the source chain.")
-    }
-
-    const destinationNetwork = await resolveNetworkByName(this._client, String(options.toChain))
+    // A missing 'toChain' means a same-chain swap (WDK `SwidgeCommonOptions.toChain`).
+    const destinationNetwork = options.toChain === undefined
+      ? sourceNetwork
+      : await resolveNetworkByName(this._client, String(options.toChain))
     const destinationToken = resolveToken(destinationNetwork, options.toToken ?? sourceToken.symbol)
 
-    if (sourceNetwork.name === destinationNetwork.name) {
-      throw new ValueError('The target chain cannot be equal to the source chain.')
+    if (sourceNetwork.name === destinationNetwork.name && sourceToken.symbol === destinationToken.symbol) {
+      throw new ValueError('The source and destination tokens cannot be the same on a same-chain swap.')
     }
 
     return { sourceNetwork, sourceToken, destinationNetwork, destinationToken }
@@ -919,7 +938,12 @@ export default class LayerswapSwidgeProtocol extends SwidgeProtocol {
       })
     }
 
-    const action = this._pickWalletDepositAction(response.deposit_actions)
+    let action
+    try {
+      action = this._pickWalletDepositAction(response.deposit_actions)
+    } catch (error) {
+      throw this._toProviderError(error)
+    }
 
     return { swap, action, quote: response.quote?.quote }
   }
@@ -931,20 +955,36 @@ export default class LayerswapSwidgeProtocol extends SwidgeProtocol {
    * @protected
    * @param {LayerswapDepositAction[]} [depositActions] - The deposit actions returned by Layerswap.
    * @returns {LayerswapDepositAction} The wallet-flow deposit action.
-   * @throws {ProviderError} If Layerswap did not return a wallet-flow deposit action.
+   * @throws {ValueError} If there is no wallet-flow deposit action.
    */
   _pickWalletDepositAction (depositActions) {
     if (!Array.isArray(depositActions) || depositActions.length === 0) {
-      throw new ProviderError('Layerswap did not return any deposit actions for this swap.', {
-        reason: ProviderErrorReason.INTERNAL_SERVER_ERROR
-      })
+      throw new ValueError('No deposit actions were given for this swap.')
     }
 
-    const transfer = depositActions.find((a) => a.type === 'transfer')
+    const transfer = depositActions.find((a) => a.type === WALLET_DEPOSIT_ACTION_TYPE)
     if (transfer) return transfer
 
-    throw new ProviderError("Layerswap returned only non-wallet deposit actions (e.g. 'manual_transfer'); cannot drive the deposit from this wallet.", {
-      reason: ProviderErrorReason.INTERNAL_SERVER_ERROR
+    throw new ValueError("Only non-wallet deposit actions (e.g. 'manual_transfer') were given; cannot drive the deposit from this wallet.")
+  }
+
+  /**
+   * Masks a `ValueError` raised while processing data returned by Layerswap as a
+   * `ProviderError`: in that context the invalid value is a malformed Layerswap response,
+   * not an invalid input of the caller. Any other error is returned as-is.
+   *
+   * @protected
+   * @param {Error} error - The error raised while processing the Layerswap data.
+   * @returns {Error} The masked error.
+   */
+  _toProviderError (error) {
+    if (!(error instanceof ValueError)) {
+      return error
+    }
+
+    return new ProviderError(`Layerswap returned an invalid response: ${error.message}`, {
+      reason: ProviderErrorReason.INTERNAL_SERVER_ERROR,
+      cause: error
     })
   }
 

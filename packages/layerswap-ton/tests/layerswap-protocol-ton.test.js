@@ -22,6 +22,7 @@ import LayerswapProtocolTon, {
   MaximumFeeExceededError,
   NoSuchElementError,
   ProviderError,
+  ProviderErrorReason,
   ProviderRequiredError,
   ValueError
 } from '../index.js'
@@ -268,6 +269,19 @@ describe('LayerswapProtocolTon', () => {
       await expect(new LayerswapProtocolTon(makeAccount()).getTransactionStatus(BODY_HASH)).rejects.toThrow(ProviderError)
     })
 
+    test.each([
+      [429, ProviderErrorReason.NETWORK_ERROR],
+      [504, ProviderErrorReason.REQUEST_TIMEOUT],
+      [500, ProviderErrorReason.INTERNAL_SERVER_ERROR]
+    ])('maps a ton center %i to the %s provider error reason', async (status, reason) => {
+      server.use(layerswapApi.networks(NETWORKS), http.get(`${TON_CENTER_V3_URL}/transactionsByMessage`, () => HttpResponse.json({}, { status })))
+
+      const error = await new LayerswapProtocolTon(makeAccount()).getTransactionStatus(BODY_HASH).catch((e) => e)
+
+      expect(error).toBeInstanceOf(ProviderError)
+      expect(error.reason).toBe(reason)
+    })
+
     test('throws a ProviderRequiredError for a deposit hash without ton center', async () => {
       server.use(layerswapApi.networks(NETWORKS))
 
@@ -396,7 +410,8 @@ describe('LayerswapProtocolTon', () => {
       const error = await new LayerswapProtocolTon(makeAccount()).swidge(JETTON_SWIDGE_OPTIONS).catch((err) => err)
 
       expect(error).toBeInstanceOf(ProviderError)
-      expect(error.message).toMatch(/malformed TON deposit address/)
+      expect(error.message).toMatch(/Malformed TON deposit address/)
+      expect(error.cause).toBeInstanceOf(ValueError)
     })
   })
 
@@ -480,13 +495,6 @@ describe('LayerswapProtocolTon', () => {
 
       await expect(new LayerswapProtocolTon(account).swidge(JETTON_SWIDGE_OPTIONS)).rejects.toThrow(DisposalError)
       expect(account.sendTransaction).not.toHaveBeenCalled()
-    })
-
-    test('throws a DisposalError when the account private key has been erased', async () => {
-      const account = makeAccount()
-      account.keyPair = { publicKey: new Uint8Array(32), privateKey: null }
-
-      await expect(new LayerswapProtocolTon(account).swidge(JETTON_SWIDGE_OPTIONS)).rejects.toThrow(DisposalError)
     })
   })
 })

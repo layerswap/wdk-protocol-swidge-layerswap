@@ -33,7 +33,8 @@ import { Address, beginCell, toNano } from '@ton/ton'
 import {
   LayerswapSwidgeProtocol,
   resolveNetworkByName,
-  normalizeWalletError
+  normalizeWalletError,
+  getProviderErrorReason
 } from '@layerswap/wdk-protocol-swidge-layerswap-core'
 
 /** @typedef {import('@tetherto/wdk-wallet-ton').WalletAccountTon} WalletAccountTon */
@@ -61,6 +62,36 @@ import {
  * @property {LayerswapDepositAction} action - The wallet-driven deposit action.
  * @property {string} comment - The Layerswap reference comment.
  * @property {bigint} amount - The amount to deposit (in base unit).
+ */
+
+/**
+ * The fields of a ton center v3 message used to trace a deposit.
+ *
+ * @typedef {Object} LayerswapTonCenterMessage
+ * @property {string} [hash] - The message hash.
+ * @property {string | null} [opcode] - The body opcode, as a hex string (e.g. `'0x7362d09c'`).
+ */
+
+/**
+ * The fields of a ton center v3 transaction used to trace a deposit.
+ *
+ * @typedef {Object} LayerswapTonCenterTransaction
+ * @property {string} hash - The transaction hash.
+ * @property {LayerswapTonCenterMessage} [in_msg] - The inbound message.
+ * @property {LayerswapTonCenterMessage[]} [out_msgs] - The outbound messages.
+ */
+
+/**
+ * @typedef {Object} LayerswapTonCenterTrace
+ * @property {Record<string, LayerswapTonCenterTransaction>} transactions - The transactions of the trace, by hash.
+ */
+
+/**
+ * A ton center v3 response: `transactions` for `transactionsByMessage`, `traces` for `traces`.
+ *
+ * @typedef {Object} LayerswapTonCenterResponse
+ * @property {LayerswapTonCenterTransaction[]} [transactions] - The matching transactions.
+ * @property {LayerswapTonCenterTrace[]} [traces] - The matching traces.
  */
 
 /**
@@ -160,7 +191,13 @@ export default class LayerswapProtocolTon extends LayerswapSwidgeProtocol {
     this._sourceNetwork = undefined
   }
 
-  /** @protected */
+  /**
+   * The symbol of the ton native token, used for gas fee entries when the Layerswap network
+   * catalog does not report it.
+   *
+   * @protected
+   * @type {string}
+   */
   get _nativeTokenSymbol () {
     return 'TON'
   }
@@ -224,14 +261,13 @@ export default class LayerswapProtocolTon extends LayerswapSwidgeProtocol {
    * @protected
    * @param {LayerswapDepositContext} context - The deposit context.
    * @returns {Promise<LayerswapTonPreparedDeposit>} The prepared deposit.
-   * @throws {ProviderError} If the deposit action is malformed, or ton center fails.
+   * @throws {ValueError} If the deposit action is malformed.
+   * @throws {ProviderError} If ton center fails.
    * @throws {ProviderRequiredError} If the account is not connected to ton center.
    */
   async _prepareDeposit ({ action, route, fromTokenAmount }) {
     if (typeof action.to_address !== 'string' || action.to_address.length === 0) {
-      throw new ProviderError('Layerswap deposit action for TON is missing to_address; the deposit message cannot be built.', {
-        reason: ProviderErrorReason.INTERNAL_SERVER_ERROR
-      })
+      throw new ValueError('The TON deposit action is missing to_address; the deposit message cannot be built.')
     }
 
     const { comment, amount } = this._parseCallData(action.call_data)
@@ -308,7 +344,7 @@ export default class LayerswapProtocolTon extends LayerswapSwidgeProtocol {
    * @private
    * @param {string} path - The api path.
    * @param {Record<string, string>} params - The query parameters.
-   * @returns {Promise<any>} The response payload.
+   * @returns {Promise<LayerswapTonCenterResponse>} The response payload.
    * @throws {ProviderRequiredError} If the account is not connected to ton center.
    * @throws {ProviderError} If the request fails.
    */
@@ -336,7 +372,7 @@ export default class LayerswapProtocolTon extends LayerswapSwidgeProtocol {
 
     if (!response.ok) {
       throw new ProviderError(`TON Center request to ${path} failed with status ${response.status}.`, {
-        reason: ProviderErrorReason.INTERNAL_SERVER_ERROR
+        reason: getProviderErrorReason(response.status)
       })
     }
 
@@ -382,20 +418,18 @@ export default class LayerswapProtocolTon extends LayerswapSwidgeProtocol {
    * @private
    * @param {string | null | undefined} callData
    * @returns {LayerswapTonCallData}
-   * @throws {ProviderError} If the call_data is missing, or has no reference comment.
+   * @throws {ValueError} If the call_data is missing, or has no reference comment.
    */
   _parseCallData (callData) {
     let parsed
     try {
-      parsed = JSON.parse(/** @type {string} */ (callData))
+      parsed = JSON.parse(callData)
     } catch (_) {
       parsed = undefined
     }
 
     if (!parsed || typeof parsed !== 'object' || typeof parsed.comment !== 'string' || parsed.comment.length === 0) {
-      throw new ProviderError(`Layerswap call_data for TON must be a JSON object with a reference comment (got '${callData}').`, {
-        reason: ProviderErrorReason.INTERNAL_SERVER_ERROR
-      })
+      throw new ValueError(`The TON call_data must be a JSON object with a reference comment (got '${callData}').`)
     }
 
     return parsed
@@ -409,8 +443,8 @@ export default class LayerswapProtocolTon extends LayerswapSwidgeProtocol {
    * @private
    * @param {LayerswapTonDepositMessageParams} params
    * @returns {Promise<LayerswapTonDepositMessage>}
-   * @throws {ProviderError} If the Layerswap deposit address is malformed, or ton center fails to
-   *   resolve the jetton wallet address.
+   * @throws {ValueError} If the deposit address is malformed.
+   * @throws {ProviderError} If ton center fails to resolve the jetton wallet address.
    * @throws {ProviderRequiredError} If the account is not connected to ton center.
    */
   async _buildDepositMessage ({ sourceToken, action, comment, amount }) {
@@ -460,16 +494,13 @@ export default class LayerswapProtocolTon extends LayerswapSwidgeProtocol {
    * @private
    * @param {string} address
    * @returns {Address}
-   * @throws {ProviderError} If Layerswap returned a malformed TON address.
+   * @throws {ValueError} If the address is not a valid TON address.
    */
   _parseDepositAddress (address) {
     try {
       return Address.parse(address)
     } catch (error) {
-      throw new ProviderError(`Layerswap returned a malformed TON deposit address '${address}'.`, {
-        reason: ProviderErrorReason.INTERNAL_SERVER_ERROR,
-        cause: error
-      })
+      throw new ValueError(`Malformed TON deposit address '${address}'.`, { cause: error })
     }
   }
 }

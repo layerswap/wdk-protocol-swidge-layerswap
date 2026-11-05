@@ -172,10 +172,17 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
  */
 
 /**
+ * The payload of a Layerswap v2 API response, by endpoint: the network catalog, a quote,
+ * a swap, or a transaction status. Null when the response has no body.
+ *
+ * @typedef {LayerswapNetwork[] | LayerswapQuoteResponse | LayerswapSwapResponse | LayerswapTransactionStatus | null} LayerswapApiPayload
+ */
+
+/**
  * The JSON envelope wrapping every Layerswap v2 API response.
  *
  * @typedef {Object} LayerswapApiEnvelope
- * @property {any} [data] - The response payload.
+ * @property {LayerswapApiPayload} [data] - The response payload.
  * @property {LayerswapApiErrorBody} [error] - The error details of a failed request.
  */
 
@@ -193,8 +200,19 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
  */
 
 /**
+ * @typedef {Object} LayerswapSpeedUpDepositParams
+ * @property {string} transaction_id - The id of the broadcast deposit transaction.
+ */
+
+/**
+ * The values of a Layerswap query string; `undefined` and `null` values are omitted.
+ *
+ * @typedef {Record<string, string | number | boolean | null | undefined>} LayerswapQueryParams
+ */
+
+/**
  * @typedef {Object} LayerswapRequestOptions
- * @property {Object} [body] - The JSON request body.
+ * @property {LayerswapCreateSwapParams | LayerswapSpeedUpDepositParams} [body] - The JSON request body.
  * @property {Record<string, string>} [headers] - Extra request headers.
  * @property {boolean} [notFoundAsNoSuchElement] - If true, a "not found" response (a 404, or a
  *   400 whose message reports the resource as not found) is thrown as a `NoSuchElementError`
@@ -210,6 +228,25 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
  * @property {string} [apiUrl]
  * @property {number} [requestTimeoutMs]
  */
+
+/**
+ * Maps the HTTP status of a failed provider response to the matching WDK provider error
+ * reason: 401 → 'UNAUTHORIZED', 403 → 'FORBIDDEN', 408 / 504 → 'REQUEST_TIMEOUT',
+ * 429 → 'NETWORK_ERROR' (rate limited, retryable), anything else → 'INTERNAL_SERVER_ERROR'.
+ *
+ * @param {number} status - The HTTP status of the failed response.
+ * @returns {string} The provider error reason (a `ProviderErrorReason` value).
+ */
+export function getProviderErrorReason (status) {
+  switch (status) {
+    case 401: return ProviderErrorReason.UNAUTHORIZED
+    case 403: return ProviderErrorReason.FORBIDDEN
+    case 408:
+    case 504: return ProviderErrorReason.REQUEST_TIMEOUT
+    case 429: return ProviderErrorReason.NETWORK_ERROR
+    default: return ProviderErrorReason.INTERNAL_SERVER_ERROR
+  }
+}
 
 /**
  * Minimal HTTP client for the Layerswap public v2 API.
@@ -381,7 +418,7 @@ export default class LayerswapApiClient {
    * @param {string} method
    * @param {string} path
    * @param {LayerswapRequestOptions} [options]
-   * @returns {Promise<any>}
+   * @returns {Promise<LayerswapApiPayload>}
    * @throws {NoSuchElementError} If `options.notFoundAsNoSuchElement` is set and Layerswap responds 404.
    * @throws {ValueError} If Layerswap rejects the request (4xx).
    * @throws {ProviderError} If the request fails, times out or returns a malformed body.
@@ -465,14 +502,8 @@ export default class LayerswapApiClient {
    */
   _buildResponseError (message, code, status, { notFoundAsNoSuchElement = false, clientErrorAsProviderError = false }) {
     let err
-    if (status === 401) {
-      err = new ProviderError(message, { reason: ProviderErrorReason.UNAUTHORIZED })
-    } else if (status === 403) {
-      err = new ProviderError(message, { reason: ProviderErrorReason.FORBIDDEN })
-    } else if (status === 408 || status === 504) {
-      err = new ProviderError(message, { reason: ProviderErrorReason.REQUEST_TIMEOUT })
-    } else if (status === 429) {
-      err = new ProviderError(message, { reason: ProviderErrorReason.NETWORK_ERROR })
+    if (status === 401 || status === 403 || status === 408 || status === 429 || status === 504) {
+      err = new ProviderError(message, { reason: getProviderErrorReason(status) })
     } else if (notFoundAsNoSuchElement && (status === 404 || (status === 400 && /not found/i.test(message)))) {
       // Layerswap answers some lookups of unknown resources with a 400 'UNEXPECTED_ERROR'
       // ("Swap … is not found") instead of a 404.
@@ -480,7 +511,7 @@ export default class LayerswapApiClient {
     } else if (status >= 400 && status < 500 && !clientErrorAsProviderError) {
       err = new ValueError(message)
     } else {
-      err = new ProviderError(message, { reason: ProviderErrorReason.INTERNAL_SERVER_ERROR })
+      err = new ProviderError(message, { reason: getProviderErrorReason(status) })
     }
 
     return Object.assign(err, { code, status })
@@ -488,7 +519,7 @@ export default class LayerswapApiClient {
 
   /**
    * @private
-   * @param {Record<string, unknown>} params
+   * @param {LayerswapQueryParams} params
    * @returns {string}
    */
   _buildQueryString (params) {

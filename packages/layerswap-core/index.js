@@ -60,7 +60,7 @@ export { default } from './src/layerswap-api-client.js'
 
 export { default as LayerswapSwidgeProtocol } from './src/layerswap-swidge-protocol.js'
 
-export { default as LayerswapApiClient } from './src/layerswap-api-client.js'
+export { default as LayerswapApiClient, getProviderErrorReason } from './src/layerswap-api-client.js'
 
 export {
   resolveSourceNetwork,

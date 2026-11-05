@@ -53,6 +53,6 @@ This repository is the Layerswap analog of the Tether WDK (Wallet Development Ki
 
 ## Semantic notes
 - Swidge fees are itemised: Layerswap's `included: true` entries are in **source-token base units**; the source-chain gas entry is non-included and in **native units**. Never sum across entries with different `token`s.
-- Exact-in only (`fromTokenAmount`); `toTokenAmount` (exact-out) throws. `toChain` is required — Layerswap has no same-chain swaps, so the inherited `swap()` always throws.
+- Exact-in only (`fromTokenAmount`); `toTokenAmount` (exact-out) throws. An omitted `toChain` means a same-chain swap on the source network, so the inherited `swap()`/`quoteSwap()` work as-is (see the root `AGENTS.md`).
 - WDK swidge `slippage` is a decimal (0.01 = 1%); legacy `BridgeOptions.slippage` stays a percent string and is divided by 100 in `_toSwidgeOptions`.
 - Legacy `BridgeResult.bridgeFee` is in **source-token base units** (= sum of `included` swidge fees). `LayerswapProtocolConfig.bridgeMaxFee` is compared against that sum only.

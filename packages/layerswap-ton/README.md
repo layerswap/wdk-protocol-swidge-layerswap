@@ -32,7 +32,7 @@ const swidge = new LayerswapTon(account, {
 const quote = await swidge.quoteSwidge({
   fromToken: 'USDT',             // jetton master address OR Layerswap symbol
   toToken: 'USDT',
-  toChain: 'ARBITRUM_MAINNET',   // required — Layerswap does not support same-chain swaps
+  toChain: 'ARBITRUM_MAINNET',   // omit for a same-chain swap on the source network
   fromTokenAmount: 10_000_000n,  // 10 USDT, in base units (USDT-Jetton has 6 decimals)
   slippage: 0.005                // 0.5%, as a decimal
 })
@@ -76,7 +76,7 @@ The shared error contract is documented in the core README. TON-specific error m
 | `ProviderRequiredError` | The wallet account is not connected to ton center. |
 | `MaximumFeeExceededError` | The deposit message exceeds the account's `transactionMaxFee` (besides the shared `bridgeMaxFee` / bps guards). |
 | `ProviderError` | Layerswap returns a deposit action without `to_address` or with a malformed TON address, or ton center fails (e.g. resolving the jetton wallet). |
-| `DisposalError` | The account reports `disposed`, or its private key has been erased by `WalletAccountTon.dispose()` (`keyPair.privateKey === null`). |
+| `DisposalError` | The account reports `disposed`. |
 
 `@tetherto/wdk-wallet-ton` throws plain `Error`s, so the "not connected to ton center" and "exceeded maximum fee" failures are mapped by message; any other wallet failure becomes a `ProviderError`.
 

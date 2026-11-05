@@ -14,12 +14,20 @@
 
 // The public API shared by every `@layerswap/wdk-protocol-swidge-layerswap-<vm>` package:
 // the types their methods take or return (incl. the inherited `swap`/`quoteSwap` and the
-// base class hooks), the API client returned by `getApiClient()` and the types of its
-// methods, the base protocol class, and the WDK errors their methods throw. Each VM package
-// re-exports this module from its own entry point (`export * from '…-core/protocol'`).
+// protected base class hooks), the wallet account interfaces their constructors accept,
+// the API client returned by `getApiClient()` and the types of its methods, the base
+// protocol classes, the core helpers the VM packages are built on, and the WDK errors
+// their methods throw. Each VM package re-exports this module from its own entry point
+// (`export * from '…-core/protocol'`).
+
+/** @typedef {import('@tetherto/wdk-wallet').ProviderErrorOptions} ProviderErrorOptions */
 
 /** @typedef {import('@tetherto/wdk-wallet/protocols').SwidgeProtocolConfig} SwidgeProtocolConfig */
 /** @typedef {import('@tetherto/wdk-wallet/protocols').SwidgeOptions} SwidgeOptions */
+/** @typedef {import('@tetherto/wdk-wallet/protocols').SwidgeCommonOptions} SwidgeCommonOptions */
+/** @typedef {import('@tetherto/wdk-wallet/protocols').SwidgeExactInOptions} SwidgeExactInOptions */
+/** @typedef {import('@tetherto/wdk-wallet/protocols').SwidgeExactOutOptions} SwidgeExactOutOptions */
+/** @typedef {import('@tetherto/wdk-wallet/protocols').SwidgeFeeType} SwidgeFeeType */
 /** @typedef {import('@tetherto/wdk-wallet/protocols').SwidgeQuote} SwidgeQuote */
 /** @typedef {import('@tetherto/wdk-wallet/protocols').SwidgeResult} SwidgeResult */
 /** @typedef {import('@tetherto/wdk-wallet/protocols').SwidgeFee} SwidgeFee */
@@ -30,9 +38,15 @@
 /** @typedef {import('@tetherto/wdk-wallet/protocols').SwidgeSupportedChain} SwidgeSupportedChain */
 /** @typedef {import('@tetherto/wdk-wallet/protocols').SwidgeSupportedToken} SwidgeSupportedToken */
 /** @typedef {import('@tetherto/wdk-wallet/protocols').SwidgeSupportedTokensOptions} SwidgeSupportedTokensOptions */
+/** @typedef {import('@tetherto/wdk-wallet/protocols').BridgeProtocolConfig} BridgeProtocolConfig */
+/** @typedef {import('@tetherto/wdk-wallet/protocols').BridgeOptions} BridgeOptions */
 /** @typedef {import('@tetherto/wdk-wallet/protocols').BridgeResult} BridgeResult */
+/** @typedef {import('@tetherto/wdk-wallet/protocols').SwapProtocolConfig} SwapProtocolConfig */
 /** @typedef {import('@tetherto/wdk-wallet/protocols').SwapOptions} SwapOptions */
 /** @typedef {import('@tetherto/wdk-wallet/protocols').SwapResult} SwapResult */
+/** @typedef {import('@tetherto/wdk-wallet/protocols').SwapErrorOptions} SwapErrorOptions */
+/** @typedef {import('@tetherto/wdk-wallet/protocols').BridgeErrorOptions} BridgeErrorOptions */
+/** @typedef {import('@tetherto/wdk-wallet/protocols').SwidgeErrorOptions} SwidgeErrorOptions */
 
 /** @typedef {import('./src/layerswap-api-client.js').LayerswapApiClientConfig} LayerswapApiClientConfig */
 /** @typedef {import('./src/layerswap-api-client.js').LayerswapApiError} LayerswapApiError */
@@ -67,9 +81,17 @@
 /** @typedef {import('./src/layerswap-swidge-protocol.js').LayerswapPreparedDeposit} LayerswapPreparedDeposit */
 /** @typedef {import('./src/layerswap-swidge-protocol.js').LayerswapBroadcastDeposit} LayerswapBroadcastDeposit */
 
-export { default as LayerswapApiClient } from './src/layerswap-api-client.js'
+export { default as LayerswapApiClient, getProviderErrorReason } from './src/layerswap-api-client.js'
 
 export { default as LayerswapSwidgeProtocol } from './src/layerswap-swidge-protocol.js'
+
+export { resolveSourceNetwork, resolveNetworkByName } from './src/networks.js'
+
+export { normalizeWalletError } from './src/swidge.js'
+
+export { SwidgeProtocol, ISwidgeProtocol } from '@tetherto/wdk-wallet/protocols'
+
+export { IWalletAccount, IWalletAccountReadOnly } from '@tetherto/wdk-wallet'
 
 export {
   AccountRequiredError,
@@ -79,8 +101,10 @@ export {
   InvalidTokenError,
   MaximumFeeExceededError,
   NoSuchElementError,
+  NotImplementedError,
   ProviderError,
   ProviderRequiredError,
+  ReadOnlyAccountRequiredError,
   SwapError,
   SwapErrorReason,
   SwidgeError,
