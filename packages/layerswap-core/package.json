@@ -16,7 +16,6 @@
   "main": "index.js",
   "files": [
     "index.js",
-    "protocol.js",
     "bare.js",
     "src/",
     "types/"
@@ -46,10 +45,6 @@
       "types": "./types/index.d.ts",
       "bare": "./bare.js",
       "default": "./index.js"
-    },
-    "./protocol": {
-      "types": "./types/protocol.d.ts",
-      "default": "./protocol.js"
     },
     "./package": {
       "default": "./package.json"

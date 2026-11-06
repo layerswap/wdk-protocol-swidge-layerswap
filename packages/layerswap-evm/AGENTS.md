@@ -35,7 +35,7 @@ This repository is the Layerswap analog of the Tether WDK (Wallet Development Ki
 4. **Build types:** `npm run build:types`
 
 ## Key Files
-- `index.js` — public entry: the default `LayerswapProtocolEvm`, the EVM-specific typedefs (wallet account types, ERC-4337 configs, `LayerswapEvmSwidgeConfig`/`LayerswapEvmBridgeConfig`), and `export * from '@layerswap/wdk-protocol-swidge-layerswap-core/protocol'` — the shared public API (WDK and Layerswap types, `LayerswapApiClient`, `LayerswapSwidgeProtocol`, WDK error classes). Rule of thumb: if a public component depends on another component, that component is public too.
+- `index.js` — public entry: the default `LayerswapProtocolEvm`, the EVM-specific typedefs (wallet account types, ERC-4337 configs, `LayerswapEvmSwidgeConfig`/`LayerswapEvmBridgeConfig`), and the explicitly listed shared public API (WDK and Layerswap types, `LayerswapApiClient`, `LayerswapSwidgeProtocol`, WDK base classes and error classes). Never `export *` from core. Rule of thumb: if a public component depends on another component, that component is public too.
 - `bare.js` — Bare runtime wrapper.
 - `src/layerswap-protocol-evm.js` — the EVM hooks of `LayerswapSwidgeProtocol`.
 - `tests/` — EVM specifics only (provider shapes, gas quotes, deposit transaction, ERC-4337, wallet errors). Shared behaviour is tested once in core. The Layerswap API is mocked with the msw fixtures of the private `@layerswap/wdk-protocol-swidge-layerswap-test-utils` package.

@@ -96,7 +96,7 @@ The error classes (re-exported from this package) and the shared throw contract 
 
 ## Exports
 
-Besides the default `LayerswapProtocolBitcoin` export, `index.js` exports the Bitcoin typedefs above plus `WalletAccountBtc` / `WalletAccountReadOnlyBtc`, and re-exports the shared public API of `@layerswap/wdk-protocol-swidge-layerswap-core/protocol` (WDK and core types, `LayerswapApiClient`, `LayerswapSwidgeProtocol`, the WDK error classes and their reason enums).
+Besides the default `LayerswapProtocolBitcoin` export, `index.js` exports the Bitcoin typedefs above plus `WalletAccountBtc` / `WalletAccountReadOnlyBtc`, and the shared public API (WDK and core types, `LayerswapApiClient`, `LayerswapSwidgeProtocol`, the WDK error classes and their reason enums).
 
 ## Semantic notes
 

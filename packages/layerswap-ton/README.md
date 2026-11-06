@@ -63,7 +63,7 @@ const tokens = await discovery.getSupportedTokens({ toChain: 'TON_MAINNET' })
 
 ## Public API
 
-The entry point re-exports `@layerswap/wdk-protocol-swidge-layerswap-core/protocol` — every shared type (`LayerswapProtocolConfig`, `LayerswapSwidgeOptions`, `LayerswapBridgeOptions`, `LayerswapBridgeResult`, `GetTransactionStatusOptions`, the WDK swidge types, …), `LayerswapApiClient` (returned by `getApiClient()`), `LayerswapSwidgeProtocol` and the WDK error classes the methods throw — plus the `@tetherto/wdk-wallet-ton` account types:
+The entry point exports the shared public API — every shared type (`LayerswapProtocolConfig`, `LayerswapSwidgeOptions`, `LayerswapBridgeOptions`, `LayerswapBridgeResult`, `GetTransactionStatusOptions`, the WDK swidge types, …), `LayerswapApiClient` (returned by `getApiClient()`), `LayerswapSwidgeProtocol` and the WDK error classes the methods throw — plus the `@tetherto/wdk-wallet-ton` account types:
 
 ```js
 import LayerswapTon, { SwidgeError, SwidgeErrorReason, BridgeError, MaximumFeeExceededError } from '@layerswap/wdk-protocol-swidge-layerswap-ton'

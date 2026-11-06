@@ -6,7 +6,6 @@ Chain-agnostic Layerswap building blocks consumed by every sibling `layerswap-<v
 
 This package must remain **VM-agnostic**. It contains:
 - `LayerswapSwidgeProtocol` — the chain-agnostic `SwidgeProtocol` implementation every VM package extends. It owns the whole public surface (quote/swidge/status/discovery/bridge adapters/transaction status), the throw contract, and the shared typedefs; VM packages only implement its hooks (`_detectSourceNetwork`, `_prepareDeposit`, `_sendDeposit`, optional `_isWritableAccount`, `_quoteSourceGas`, `_assertSwidgeRoute`, `_callWallet`, `_nativeTokenSymbol`). Disposal is detected through the WDK `IDisposable.disposed` getter (`account.disposed`).
-- `protocol.js` (`…-core/protocol`) — the public API shared by every VM package (WDK/Layerswap types, `LayerswapApiClient`, `LayerswapSwidgeProtocol`, WDK errors); VM entry points `export *` it.
 - `LayerswapApiClient` — HTTP wrapper over the Layerswap v2 API.
 - Network/token resolution helpers (`resolveSourceNetwork`, `resolveNetworkByName`, `resolveToken`).
 - Decimal/base-unit conversion helpers (`formatBaseUnits`, `parseDecimal`).
@@ -35,5 +34,4 @@ Everything that can be shared **must** live here — no duplication across VM pa
 - `src/networks.js` — resolution + decimal helpers.
 - `src/swidge.js` — WDK Swidge mapping helpers shared by every VM package.
 - `src/layerswap-swidge-protocol.js` — the `LayerswapSwidgeProtocol` base class and the shared protocol typedefs.
-- `protocol.js` — the shared public API re-exported by every VM package.
 - `types/` — generated; do not edit by hand.

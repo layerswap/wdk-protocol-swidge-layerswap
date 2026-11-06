@@ -2,7 +2,6 @@
   "extends": "../../tsconfig.base.json",
   "include": [
     "index.js",
-    "protocol.js",
     "src/**/*.js"
   ],
   "compilerOptions": {

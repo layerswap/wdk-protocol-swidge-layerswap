@@ -10,7 +10,7 @@ Sibling of `layerswap-evm`, `layerswap-solana` and `layerswap-bitcoin` for the T
 
 ## Key Files
 
-- `index.js` — public entry: default export of `LayerswapProtocolTon`, the wallet-ton account typedefs, and `export * from '@layerswap/wdk-protocol-swidge-layerswap-core/protocol'` (every shared type, `LayerswapApiClient`, `LayerswapSwidgeProtocol` and the WDK error classes). Do not re-list shared exports here.
+- `index.js` — public entry: default export of `LayerswapProtocolTon`, the wallet-ton account typedefs, and the explicitly listed shared public API (WDK and Layerswap types, `LayerswapApiClient`, `LayerswapSwidgeProtocol`, WDK base classes and error classes). Never `export *` from core.
 - `bare.js` — Bare runtime wrapper.
 - `src/layerswap-protocol-ton.js` — the TON hooks of `LayerswapSwidgeProtocol`.
 - `tests/` — cover the TON specifics only (default network, gas approximations, deposit message, account detection, wallet error mapping); shared behaviour is tested once in core. The Layerswap API is mocked with the shared msw fixtures of `@layerswap/wdk-protocol-swidge-layerswap-test-utils`.

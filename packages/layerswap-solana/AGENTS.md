@@ -4,7 +4,7 @@ Layerswap swidge protocol for `@tetherto/wdk-wallet-solana` accounts. `Layerswap
 
 ## Key Files
 
-- `index.js` — public entry: default export of `LayerswapProtocolSolana`, the wallet-solana account typedefs, and `export * from '@layerswap/wdk-protocol-swidge-layerswap-core/protocol'` (shared types, `LayerswapApiClient`, `LayerswapSwidgeProtocol`, WDK error classes).
+- `index.js` — public entry: default export of `LayerswapProtocolSolana`, the wallet-solana account typedefs, and the explicitly listed shared public API (WDK and Layerswap types, `LayerswapApiClient`, `LayerswapSwidgeProtocol`, WDK base classes and error classes). Never `export *` from core.
 - `bare.js` — Bare runtime wrapper.
 - `src/layerswap-protocol-solana.js` — the Solana hooks of `LayerswapSwidgeProtocol`.
 - `tests/` — Solana-specific tests only (shared behaviour is tested once in core). The Layerswap API is mocked with `@layerswap/wdk-protocol-swidge-layerswap-test-utils` (msw); the Solana JSON-RPC endpoint is mocked locally, and deposits run end-to-end through a real `WalletAccountSolana`.

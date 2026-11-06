@@ -2,7 +2,7 @@
 
 WDK module that lets `@tetherto/wdk-wallet-solana` accounts swap and bridge tokens across chains via the Layerswap public API. Implements `SwidgeProtocol` from `@tetherto/wdk-wallet/protocols`: `quoteSwidge` / `swidge` / `getSwidgeStatus` / `getSupportedChains` / `getSupportedTokens`.
 
-`LayerswapProtocolSolana` is a thin subclass of `LayerswapSwidgeProtocol` from `@layerswap/wdk-protocol-swidge-layerswap-core`, which implements the whole chain-agnostic swidge flow (quotes, fee guards, swap creation, status, discovery, the legacy `bridge`/`quoteBridge` adapters) and the WDK error contract. This package only adds the Solana specifics listed below. Its entry point re-exports the shared public API (types, `LayerswapApiClient`, `LayerswapSwidgeProtocol`, WDK error classes) from `@layerswap/wdk-protocol-swidge-layerswap-core/protocol`.
+`LayerswapProtocolSolana` is a thin subclass of `LayerswapSwidgeProtocol` from `@layerswap/wdk-protocol-swidge-layerswap-core`, which implements the whole chain-agnostic swidge flow (quotes, fee guards, swap creation, status, discovery, the legacy `bridge`/`quoteBridge` adapters) and the WDK error contract. This package only adds the Solana specifics listed below. Its entry point also exports the shared public API (types, `LayerswapApiClient`, `LayerswapSwidgeProtocol`, WDK error classes).
 
 ## Install
 

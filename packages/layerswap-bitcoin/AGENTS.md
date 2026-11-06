@@ -15,7 +15,7 @@ Bitcoin source-VM package. `LayerswapProtocolBitcoin` is a **thin subclass** of 
 
 ## Key Files
 
-- `index.js` — public entry: default export of `LayerswapProtocolBitcoin`, the Bitcoin-specific typedefs (`LayerswapBitcoinProtocolConfig`, `LayerswapSpecificBitcoinProtocolConfig`, `LayerswapSpecificBitcoinOptions`, `LayerswapBitcoinSwidgeOptions`, `LayerswapBitcoinBridgeOptions`, `WalletAccountBtc`, `WalletAccountReadOnlyBtc`), and `export * from '@layerswap/wdk-protocol-swidge-layerswap-core/protocol'` for the shared public API (WDK/core types, `LayerswapApiClient`, `LayerswapSwidgeProtocol`, WDK error classes).
+- `index.js` — public entry: default export of `LayerswapProtocolBitcoin`, the Bitcoin-specific typedefs (`LayerswapBitcoinProtocolConfig`, `LayerswapSpecificBitcoinProtocolConfig`, `LayerswapSpecificBitcoinOptions`, `LayerswapBitcoinSwidgeOptions`, `LayerswapBitcoinBridgeOptions`, `WalletAccountBtc`, `WalletAccountReadOnlyBtc`), and the explicitly listed shared public API (WDK and Layerswap types, `LayerswapApiClient`, `LayerswapSwidgeProtocol`, WDK base classes and error classes). Never `export *` from core.
 - `bare.js` — Bare runtime wrapper.
 - `src/layerswap-protocol-bitcoin.js` — the Bitcoin hooks.
 - `tests/fixtures/RESEARCH-NOTES.md` — records what was verified live against Layerswap vs assumed from the Layerswap UI source code.

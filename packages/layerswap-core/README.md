@@ -40,9 +40,9 @@ The chain-agnostic WDK swidge protocol, extended by every VM package. It impleme
 
 The class is generic over the swidge/bridge options and configs (`@template O, C, B, BC`), so a VM package can extend them with its own options (e.g. ERC-4337 overrides, Bitcoin `feeRate`) while keeping the typings exact.
 
-## The `/protocol` entry point
+## Public API of the VM packages
 
-`@layerswap/wdk-protocol-swidge-layerswap-core/protocol` is the public API shared by every VM package — the WDK swidge types, the Layerswap protocol types, `LayerswapApiClient`, `LayerswapSwidgeProtocol` and the WDK error classes the protocols throw. Each VM package re-exports it from its own entry point (`export * from '…-core/protocol'`), so a consumer never needs to depend on core directly.
+This package's entry point also exports helpers meant only for the sibling VM packages. Each VM package selects its public API explicitly in its own entry point — the WDK swidge types, the Layerswap protocol types, `LayerswapApiClient`, `LayerswapSwidgeProtocol` and the WDK error classes the protocols throw — so a consumer never needs to depend on core directly.
 
 ## Protocol API reference
 
