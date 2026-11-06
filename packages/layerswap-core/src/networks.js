@@ -14,9 +14,13 @@
 
 'use strict'
 
+import { InvalidTokenError, ValueError } from '@tetherto/wdk-wallet/protocols'
+
 /** @typedef {import('./layerswap-api-client.js').default} LayerswapApiClient */
 /** @typedef {import('./layerswap-api-client.js').LayerswapNetwork} LayerswapNetwork */
 /** @typedef {import('./layerswap-api-client.js').LayerswapToken} LayerswapToken */
+
+const LEADING_ZEROS_PATTERN = /^0+(?=\d)/
 
 /**
  * Finds the Layerswap network whose on-chain id matches the given numeric chain id.
@@ -24,6 +28,8 @@
  * @param {LayerswapApiClient} client
  * @param {number | bigint} chainId
  * @returns {Promise<LayerswapNetwork>}
+ * @throws {ValueError} If Layerswap does not support the chain id.
+ * @throws {ProviderError} If the Layerswap API fails to return the network catalog.
  */
 export async function resolveSourceNetwork (client, chainId) {
   const networks = await client.getNetworks()
@@ -35,7 +41,7 @@ export async function resolveSourceNetwork (client, chainId) {
     }
   }
 
-  throw new Error(`Layerswap does not support source chain with id '${target}'.`)
+  throw new ValueError(`Layerswap does not support source chain with id '${target}'.`)
 }
 
 /**
@@ -44,6 +50,8 @@ export async function resolveSourceNetwork (client, chainId) {
  * @param {LayerswapApiClient} client
  * @param {string} name
  * @returns {Promise<LayerswapNetwork>}
+ * @throws {ValueError} If Layerswap does not support the network.
+ * @throws {ProviderError} If the Layerswap API fails to return the network catalog.
  */
 export async function resolveNetworkByName (client, name) {
   const networks = await client.getNetworks()
@@ -55,7 +63,7 @@ export async function resolveNetworkByName (client, name) {
     }
   }
 
-  throw new Error(`Layerswap does not support destination network '${name}'.`)
+  throw new ValueError(`Layerswap does not support network '${name}'.`)
 }
 
 /**
@@ -65,10 +73,11 @@ export async function resolveNetworkByName (client, name) {
  * @param {LayerswapNetwork} network
  * @param {string} identifier - Contract address (0x…) or Layerswap symbol (e.g. 'USDC').
  * @returns {LayerswapToken}
+ * @throws {InvalidTokenError} If the token is not supported on the network.
  */
 export function resolveToken (network, identifier) {
   if (!network.tokens || network.tokens.length === 0) {
-    throw new Error(`Layerswap network '${network.name}' has no tokens listed.`)
+    throw new InvalidTokenError(`Layerswap network '${network.name}' has no tokens listed.`)
   }
 
   const looksLikeAddress = typeof identifier === 'string' && identifier.startsWith('0x') && identifier.length === 42
@@ -89,7 +98,7 @@ export function resolveToken (network, identifier) {
     }
   }
 
-  throw new Error(`Token '${identifier}' not supported on Layerswap network '${network.name}'.`)
+  throw new InvalidTokenError(`Token '${identifier}' not supported on Layerswap network '${network.name}'.`)
 }
 
 /**
@@ -132,7 +141,7 @@ export function parseDecimal (value, decimals) {
   const [intPart, fracPartRaw = ''] = body.split('.')
   const fracPart = fracPartRaw.slice(0, decimals).padEnd(decimals, '0')
 
-  const combined = `${intPart}${fracPart}`.replace(/^0+(?=\d)/, '')
+  const combined = `${intPart}${fracPart}`.replace(LEADING_ZEROS_PATTERN, '')
   if (combined.length === 0) return 0n
 
   const result = BigInt(combined)

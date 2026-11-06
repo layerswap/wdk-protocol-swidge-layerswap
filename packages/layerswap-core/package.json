@@ -14,6 +14,12 @@
   "author": "Aren <aren@bransfer.io>",
   "license": "Apache-2.0",
   "main": "index.js",
+  "files": [
+    "index.js",
+    "bare.js",
+    "src/",
+    "types/"
+  ],
   "type": "module",
   "scripts": {
     "build:types": "tsc",
@@ -23,14 +29,16 @@
     "test:coverage": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --coverage"
   },
   "dependencies": {
+    "@tetherto/wdk-wallet": "1.0.0-beta.25",
     "bare-node-runtime": "^1.5.0"
   },
   "devDependencies": {
     "@jest/globals": "30.4.1",
+    "@layerswap/wdk-protocol-swidge-layerswap-test-utils": "workspace:*",
     "cross-env": "10.1.0",
     "jest": "30.4.2",
     "standard": "17.1.2",
-    "typescript": "7.0.2"
+    "typescript": "5.8.3"
   },
   "exports": {
     ".": {
@@ -40,6 +48,9 @@
     },
     "./package": {
       "default": "./package.json"
+    },
+    "./types/*": {
+      "types": "./types/*"
     }
   },
   "standard": {

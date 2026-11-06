@@ -9,7 +9,7 @@
 // on the destination chain.
 //
 // Run:
-//   node tests/integration/swidge-testnet.mjs
+//   node tests/end-to-end/swidge-testnet.mjs
 //
 // Required env vars:
 //   LAYERSWAP_SEED              BIP-39 mnemonic for the source-chain wallet.

@@ -14,6 +14,8 @@ Unlike on-chain bridges, Layerswap is HTTP-orchestrated:
 npm install @layerswap/wdk-protocol-swidge-layerswap-evm
 ```
 
+`@tetherto/wdk-wallet`, `@tetherto/wdk-wallet-evm` and `@tetherto/wdk-wallet-evm-erc-4337` are regular dependencies, pinned to exact versions: while the WDK is in pre-release, a new beta can contain breaking changes, so each release of this module is tied to the WDK versions it was tested against.
+
 ## Usage
 
 ```javascript
@@ -61,59 +63,19 @@ const { status, transactions } = await protocol.getSwidgeStatus(result.id)
 
 ## API Reference
 
-### `new LayerswapProtocolEvm(account, config)`
+### `new LayerswapProtocolEvm(account, config?)`
 
-- `account` — A WDK EVM wallet account (full or read-only), or `undefined` for discovery-only use. Read-only accounts may call `quoteSwidge`/discovery/status methods but not `swidge`.
-- `config.apiKey` *(optional)* — Layerswap API key, sent as `X-LS-APIKEY` when set. Use for higher rate limits / partner attribution.
-- `config.apiUrl` — API base URL. Default: `https://api.layerswap.io`.
-- `config.maxNetworkFeeBps` / `config.maxProtocolFeeBps` — WDK swidge fee guards, in basis points of the input amount. Checked against fee entries denominated in the source token before broadcasting.
-- `config.bridgeMaxFee` — Maximum acceptable Layerswap fee, in **source-token base units** (legacy guard; compared against the sum of `included` fees).
-- `config.requestTimeoutMs` — HTTP timeout. Default: `30000`.
+- `account` — A WDK EVM wallet account (full or read-only, standard or ERC-4337), or `undefined` for discovery-only use. The source chain is detected through the provider the account was built with (`account._provider`), so every provider shape the wallet supports works as-is: an rpc url, an EIP-1193 provider, an ethers `Provider`, or a list of them (wrapped in the WDK fail-over provider).
+- `config` — `LayerswapProtocolConfig` (API key/url, fee guards, timeout).
 
-### `quoteSwidge(options): Promise<SwidgeQuote>`
+The protocol API (`quoteSwidge`, `swidge`, `getSwidgeStatus`, `getSupportedChains`, `getSupportedTokens`, `getTransactionStatus`, the legacy `bridge`/`quoteBridge`), its options, fee semantics and errors are shared by every Layerswap VM package and documented once in the [core package's Protocol API reference](../layerswap-core/README.md#protocol-api-reference). All of its types and error classes are re-exported from this package.
 
-Returns a non-binding quote: `{ fromTokenAmount, toTokenAmount, toTokenAmountMin, fees, estimatedDuration }`. When an account is bound, `fees` includes a non-included `'network'` entry with the estimated source-chain gas.
+### EVM specifics
 
-### `swidge(options, config?): Promise<SwidgeResult>`
-
-Creates the Layerswap swap, enforces the fee guards, broadcasts the source-chain deposit, and returns `{ id, hash, fees, transactions, fromTokenAmount, toTokenAmount, toTokenAmountMin }`. `id` is the Layerswap swap id (use it with `getSwidgeStatus`); `hash` is the deposit tx hash. With an ERC-4337 account, `config` wallet overrides (paymaster, sponsorship, …) are forwarded to `sendTransaction`.
-
-### `getSwidgeStatus(id): Promise<SwidgeStatusResult>`
-
-Returns the WDK-mapped status plus the source/destination/refund transactions Layerswap has observed. The status is derived **transaction-first**: a completed output (payout) transaction means `'completed'` even if Layerswap's swap-level status lags behind; a refund transaction maps to `'refunded'`/`'refund-pending'`; an in-flight output means `'pending'`. Only without a decisive transaction does the swap-level status apply (`user_transfer_pending` → `'action-required'`, `ls_transfer_pending` → `'pending'`, terminal states 1:1).
-
-### `getSupportedChains()` / `getSupportedTokens(options?)`
-
-Expose the live Layerswap network catalog in the WDK shapes. Chain `id`s are Layerswap network names (`'ETHEREUM_MAINNET'`, …) — use them as `fromChain`/`toChain`.
-
-### `SwidgeOptions` (Layerswap extensions included)
-
-| field | type | required | notes |
-| --- | --- | --- | --- |
-| `fromToken` | `string` | ✓ | Source token: contract address (`0x…`) OR Layerswap symbol (`'USDC'`). |
-| `fromTokenAmount` | `number \| bigint` | ✓ | Source amount in base units. **Exact-in only** — passing `toTokenAmount` throws. |
-| `toChain` | `string \| number` | ✓ | Layerswap destination network name (`<CHAIN>_<ENV>` uppercase, e.g. `'ARBITRUM_MAINNET'`). Required: Layerswap does not support same-chain swaps. |
-| `toToken` | `string` | | Destination token (address or symbol). Defaults to the source token's symbol. |
-| `recipient` | `string` | | Destination recipient. Defaults to the account address when source and destination share the same VM type; required otherwise. |
-| `fromChain` | `string \| number` | | Layerswap source network name. Defaults to the connected provider's chain. |
-| `slippage` | `number` | | Decimal, e.g. `0.01` for 1%. |
-| `minAmountOut` | `number \| bigint` | | Minimum acceptable destination amount (base units); checked against the quoted minimum before broadcasting. |
-| `refundAddress` | `string` | | Refund address if the swap fails after deposit. |
-| `refuel` | `boolean` | | Request a native-gas drop on the destination. |
-| `referenceId` | `string` | | External reference id for the swap. |
-
-> **Fee semantics.** Layerswap deducts its fees from the source amount: the `'protocol'` (service) and `'network'` (destination) entries are denominated in the **source token** with `included: true`. Source-chain gas is a separate non-included `'network'` entry in the **native token**. Never sum amounts across fee entries with different `token`s.
-
-## Legacy bridge surface
-
-The pre-swidge interface is kept as a thin adapter over `swidge`:
-
-```javascript
-const { fee, bridgeFee } = await protocol.quoteBridge({ targetChain, recipient, token, amount })
-const { hash, swapId } = await protocol.bridge({ targetChain, recipient, token, amount })
-```
-
-`hash` is the source-chain deposit tx hash, `fee` the native-unit gas cost, `bridgeFee` the Layerswap fee in **source-token base units**, and `swapId` the Layerswap swap id. Legacy `slippage` remains a percent string (`'0.5'`). The base class additionally derives `swap`/`quoteSwap`, but Layerswap cannot fulfil same-chain swaps, so those always throw.
+- **Deposit transaction** — ERC-20 sources send Layerswap's `call_data` to the token contract with `value: 0`; native sources send `amount_in_base_units` as `value` with empty calldata. Its gas is quoted with `quoteSendTransaction` before the fee guards run.
+- **Quotes** — the source-chain gas entry is estimated with `quoteTransfer` (ERC-20) or `quoteSendTransaction` (native) and omitted when the estimate fails (e.g. unfunded account).
+- **ERC-4337** — with a `WalletAccountEvmErc4337`, the deposit goes through the array form `sendTransaction([tx], config)`; `swidge(options, config)` / `bridge(options, config)` accept the wallet overrides (`LayerswapEvmSwidgeConfig` / `LayerswapEvmBridgeConfig`: paymaster token, sponsorship policy, native coins).
+- **Errors** — a node `INSUFFICIENT_FUNDS` rejection becomes a `SwidgeError` with reason `INSUFFICIENT_BALANCE` (a `BridgeError` through `bridge`).
 
 ## Development
 

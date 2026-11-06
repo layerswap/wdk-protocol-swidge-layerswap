@@ -1,4 +1,4 @@
-# Integration tests
+# End-to-end tests
 
 `swidge-testnet.mjs` is a runnable script that drives the full Layerswap flow against a real testnet — it creates a swap, broadcasts the source-chain deposit transaction, and polls Layerswap until the destination payout lands. **This is not a Jest test.** It spends testnet funds.
 
@@ -53,7 +53,7 @@ LAYERSWAP_SOURCE_RPC="https://eth-sepolia.g.alchemy.com/v2/YOUR_KEY" \
 LAYERSWAP_TARGET_CHAIN="OPTIMISM_SEPOLIA" \
 LAYERSWAP_SOURCE_TOKEN="ETH" \
 LAYERSWAP_AMOUNT="10000000000000000" \
-node tests/integration/swidge-testnet.mjs
+node tests/end-to-end/swidge-testnet.mjs
 ```
 
 **Real swidge:**
@@ -64,7 +64,7 @@ LAYERSWAP_SOURCE_RPC="https://eth-sepolia.g.alchemy.com/v2/YOUR_KEY" \
 LAYERSWAP_TARGET_CHAIN="OPTIMISM_SEPOLIA" \
 LAYERSWAP_SOURCE_TOKEN="ETH" \
 LAYERSWAP_AMOUNT="10000000000000000" \
-node tests/integration/swidge-testnet.mjs
+node tests/end-to-end/swidge-testnet.mjs
 ```
 
 ## What it does

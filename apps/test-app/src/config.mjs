@@ -33,6 +33,7 @@ export function loadConfig () {
     recipient: process.env.LAYERSWAP_RECIPIENT,
     sourceChainOverride: process.env.LAYERSWAP_SOURCE_CHAIN,
     btcFeeRate: process.env.LAYERSWAP_BTC_FEE_RATE,
+    refuel: process.env.LAYERSWAP_REFUEL === 'true',
     pollIntervalMs: Number(optional('LAYERSWAP_POLL_INTERVAL_MS', '10000')),
     pollTimeoutMs: Number(optional('LAYERSWAP_POLL_TIMEOUT_MS', '900000'))
   }

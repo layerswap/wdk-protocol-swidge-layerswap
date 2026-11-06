@@ -14,6 +14,9 @@
 
 'use strict'
 
+import { ProviderErrorReason } from '@tetherto/wdk-wallet'
+import { NoSuchElementError, ProviderError, ValueError } from '@tetherto/wdk-wallet/protocols'
+
 const DEFAULT_API_URL = 'https://api.layerswap.io'
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
@@ -108,10 +111,16 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
  */
 
 /**
+ * @typedef {Object} LayerswapQuoteResponse
+ * @property {LayerswapQuote} quote
+ */
+
+/**
  * @typedef {Object} LayerswapSwapResponse
  * @property {LayerswapSwap} swap
  * @property {LayerswapDepositAction[]} [deposit_actions]
- * @property {{ quote: LayerswapQuote }} [quote]
+ * @property {LayerswapQuote} [quote] - The locked-in quote. Unlike `GET /api/v2/quote`
+ *   (a `LayerswapQuoteResponse`), the swap endpoints return the quote flat, not nested.
  */
 
 /**
@@ -158,11 +167,87 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
  */
 
 /**
+ * @typedef {Object} LayerswapApiErrorBody
+ * @property {string} [code] - Layerswap's error code (e.g. `'NOT_FOUND'`).
+ * @property {string} [message] - Layerswap's error message.
+ */
+
+/**
+ * The payload of a Layerswap v2 API response, by endpoint: the network catalog, a quote,
+ * a swap, or a transaction status. Null when the response has no body.
+ *
+ * @typedef {LayerswapNetwork[] | LayerswapQuoteResponse | LayerswapSwapResponse | LayerswapTransactionStatus | null} LayerswapApiPayload
+ */
+
+/**
+ * The JSON envelope wrapping every Layerswap v2 API response.
+ *
+ * @typedef {Object} LayerswapApiEnvelope
+ * @property {LayerswapApiPayload} [data] - The response payload.
+ * @property {LayerswapApiErrorBody} [error] - The error details of a failed request.
+ */
+
+/**
+ * A WDK error raised for a failed Layerswap request, decorated with Layerswap's error
+ * code and the HTTP status.
+ *
+ * @typedef {Error & LayerswapApiErrorDetails} LayerswapApiError
+ */
+
+/**
+ * @typedef {Object} LayerswapApiErrorDetails
+ * @property {string} code - Layerswap's error code, or `HTTP_<status>` when absent.
+ * @property {number} status - The HTTP status of the response.
+ */
+
+/**
+ * @typedef {Object} LayerswapSpeedUpDepositParams
+ * @property {string} transaction_id - The id of the broadcast deposit transaction.
+ */
+
+/**
+ * The values of a Layerswap query string; `undefined` and `null` values are omitted.
+ *
+ * @typedef {Record<string, string | number | boolean | null | undefined>} LayerswapQueryParams
+ */
+
+/**
+ * @typedef {Object} LayerswapRequestOptions
+ * @property {LayerswapCreateSwapParams | LayerswapSpeedUpDepositParams} [body] - The JSON request body.
+ * @property {Record<string, string>} [headers] - Extra request headers.
+ * @property {boolean} [notFoundAsNoSuchElement] - If true, a "not found" response (a 404, or a
+ *   400 whose message reports the resource as not found) is thrown as a `NoSuchElementError`
+ *   instead of a `ValueError`.
+ * @property {boolean} [clientErrorAsProviderError] - If true, a 4xx response is thrown as a
+ *   `ProviderError` instead of a `ValueError`. Set for requests that carry no caller input, which
+ *   therefore cannot be rejected for invalid parameters.
+ */
+
+/**
  * @typedef {Object} LayerswapApiClientConfig
  * @property {string} [apiKey]
  * @property {string} [apiUrl]
  * @property {number} [requestTimeoutMs]
  */
+
+/**
+ * Maps the HTTP status of a failed provider response to the matching WDK provider error
+ * reason: 401 → 'UNAUTHORIZED', 403 → 'FORBIDDEN', 408 / 504 → 'REQUEST_TIMEOUT',
+ * 429 → 'NETWORK_ERROR' (rate limited, retryable), anything else → 'INTERNAL_SERVER_ERROR'.
+ *
+ * @param {number} status - The HTTP status of the failed response.
+ * @returns {string} The provider error reason (a `ProviderErrorReason` value).
+ */
+export function getProviderErrorReason (status) {
+  switch (status) {
+    case 401: return ProviderErrorReason.UNAUTHORIZED
+    case 403: return ProviderErrorReason.FORBIDDEN
+    case 408:
+    case 504: return ProviderErrorReason.REQUEST_TIMEOUT
+    case 429: return ProviderErrorReason.NETWORK_ERROR
+    default: return ProviderErrorReason.INTERNAL_SERVER_ERROR
+  }
+}
 
 /**
  * Minimal HTTP client for the Layerswap public v2 API.
@@ -174,6 +259,14 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
  * - `GET  /api/v2/swaps/{id}`
  * - `POST /api/v2/swaps/{id}/deposit_speedup`
  * - `GET  /api/v2/transaction_status`
+ *
+ * Failed requests are thrown as WDK errors, carrying Layerswap's error `code` and the
+ * HTTP `status` as extra properties:
+ * - `ProviderError` when the API is unreachable, times out, rejects the credentials,
+ *   rate-limits the client, fails server-side, or returns a malformed body;
+ * - `NoSuchElementError` when a looked-up swap or transaction does not exist;
+ * - `ValueError` when Layerswap rejects the request parameters (other 4xx responses), except
+ *   for `getNetworks()`, which takes no parameters and throws a `ProviderError` instead.
  */
 export default class LayerswapApiClient {
   /**
@@ -207,10 +300,11 @@ export default class LayerswapApiClient {
    * Returns the Layerswap network/token catalog. Cached for the lifetime of this client.
    *
    * @returns {Promise<LayerswapNetwork[]>}
+   * @throws {ProviderError} If the request fails.
    */
   async getNetworks () {
     if (!this._networksPromise) {
-      this._networksPromise = this._request('GET', '/api/v2/networks').catch((err) => {
+      this._networksPromise = this._request('GET', '/api/v2/networks', { clientErrorAsProviderError: true }).catch((err) => {
         this._networksPromise = null
         throw err
       })
@@ -223,7 +317,9 @@ export default class LayerswapApiClient {
    * Fetches a fee/receive quote for a prospective swap.
    *
    * @param {LayerswapGetQuoteParams} params
-   * @returns {Promise<{ quote: LayerswapQuote }>}
+   * @returns {Promise<LayerswapQuoteResponse>}
+   * @throws {ValueError} If Layerswap rejects the quote parameters.
+   * @throws {ProviderError} If the request fails.
    */
   async getQuote (params) {
     const query = this._buildQueryString({
@@ -246,10 +342,13 @@ export default class LayerswapApiClient {
    *
    * @param {LayerswapCreateSwapParams} params
    * @returns {Promise<LayerswapSwapResponse>}
+   * @throws {ValueError} If Layerswap rejects the swap parameters.
+   * @throws {ProviderError} If the request fails.
    */
   async createSwap (params) {
-    return this._request('POST', '/api/v2/swaps', params, {
-      'X-LS-CORRELATION-ID': this._randomCorrelationId()
+    return this._request('POST', '/api/v2/swaps', {
+      body: params,
+      headers: { 'X-LS-CORRELATION-ID': this._randomCorrelationId() }
     })
   }
 
@@ -258,9 +357,14 @@ export default class LayerswapApiClient {
    *
    * @param {string} swapId
    * @returns {Promise<LayerswapSwapResponse>}
+   * @throws {NoSuchElementError} If no swap exists with the given id.
+   * @throws {ValueError} If Layerswap rejects the swap id.
+   * @throws {ProviderError} If the request fails.
    */
   async getSwap (swapId) {
-    return this._request('GET', `/api/v2/swaps/${encodeURIComponent(swapId)}`)
+    return this._request('GET', `/api/v2/swaps/${encodeURIComponent(swapId)}`, {
+      notFoundAsNoSuchElement: true
+    })
   }
 
   /**
@@ -269,22 +373,28 @@ export default class LayerswapApiClient {
    * but the tx might still revert or be dropped from the mempool — Layerswap will surface
    * `'failed'` here even before the swap as a whole reaches a terminal status.
    *
-   * Throws if Layerswap cannot find the transaction (e.g. before it's been indexed, or
-   * if the network/transaction_id pair is wrong). The protocol-level wrapper calls this
-   * once per poll; callers should treat `NOT_FOUND` as "not yet indexed, retry later".
+   * Throws a `NoSuchElementError` if Layerswap cannot find the transaction (e.g. before
+   * it's been indexed, or if the network/transaction_id pair is wrong). The protocol-level
+   * wrapper calls this once per poll; callers should treat `NoSuchElementError` as
+   * "not yet indexed, retry later".
    *
    * @param {string} networkName  Layerswap network name (e.g. `'ETHEREUM_MAINNET'`,
    *                              `'TRON_MAINNET'`, `'BITCOIN_MAINNET'`).
    * @param {string} transactionId The on-chain transaction hash / id, in the source chain's
    *                              native format.
    * @returns {Promise<LayerswapTransactionStatus>}
+   * @throws {NoSuchElementError} If Layerswap cannot find the transaction.
+   * @throws {ValueError} If Layerswap rejects the network/transaction id pair.
+   * @throws {ProviderError} If the request fails.
    */
   async getTransactionStatus (networkName, transactionId) {
     const query = this._buildQueryString({
       network: networkName,
       transaction_id: transactionId
     })
-    return this._request('GET', `/api/v2/transaction_status${query}`)
+    return this._request('GET', `/api/v2/transaction_status${query}`, {
+      notFoundAsNoSuchElement: true
+    })
   }
 
   /**
@@ -293,24 +403,29 @@ export default class LayerswapApiClient {
    * @param {string} swapId
    * @param {string} transactionId
    * @returns {Promise<void>}
+   * @throws {NoSuchElementError} If no swap exists with the given id.
+   * @throws {ValueError} If Layerswap rejects the transaction id.
+   * @throws {ProviderError} If the request fails.
    */
   async speedUpDeposit (swapId, transactionId) {
-    await this._request(
-      'POST',
-      `/api/v2/swaps/${encodeURIComponent(swapId)}/deposit_speedup`,
-      { transaction_id: transactionId }
-    )
+    await this._request('POST', `/api/v2/swaps/${encodeURIComponent(swapId)}/deposit_speedup`, {
+      body: { transaction_id: transactionId },
+      notFoundAsNoSuchElement: true
+    })
   }
 
   /**
    * @private
    * @param {string} method
    * @param {string} path
-   * @param {Object} [body]
-   * @param {Object} [extraHeaders]
-   * @returns {Promise<any>}
+   * @param {LayerswapRequestOptions} [options]
+   * @returns {Promise<LayerswapApiPayload>}
+   * @throws {NoSuchElementError} If `options.notFoundAsNoSuchElement` is set and Layerswap responds 404.
+   * @throws {ValueError} If Layerswap rejects the request (4xx).
+   * @throws {ProviderError} If the request fails, times out or returns a malformed body.
    */
-  async _request (method, path, body, extraHeaders) {
+  async _request (method, path, options = {}) {
+    const { body, headers: extraHeaders } = options
     const url = this._baseUrl + path
 
     const headers = {
@@ -337,13 +452,19 @@ export default class LayerswapApiClient {
     } catch (err) {
       clearTimeout(timer)
       if (err && err.name === 'AbortError') {
-        throw new Error(`Layerswap request to ${method} ${path} timed out after ${this._timeoutMs}ms.`)
+        throw new ProviderError(`Layerswap request to ${method} ${path} timed out after ${this._timeoutMs}ms.`, {
+          reason: ProviderErrorReason.REQUEST_TIMEOUT,
+          cause: err
+        })
       }
-      throw new Error(`Layerswap request to ${method} ${path} failed: ${err && err.message ? err.message : String(err)}`)
+      throw new ProviderError(`Layerswap request to ${method} ${path} failed: ${err && err.message ? err.message : String(err)}`, {
+        reason: ProviderErrorReason.NETWORK_ERROR,
+        cause: err
+      })
     }
     clearTimeout(timer)
 
-    /** @type {{ data?: any, error?: { code?: string, message?: string } } | null} */
+    /** @type {LayerswapApiEnvelope | null} */
     let envelope = null
 
     const text = await response.text()
@@ -351,28 +472,55 @@ export default class LayerswapApiClient {
       try {
         envelope = JSON.parse(text)
       } catch (_) {
-        if (!response.ok) {
-          throw new Error(`Layerswap ${method} ${path} responded ${response.status}: ${text.slice(0, 200)}`)
-        }
-        throw new Error(`Layerswap ${method} ${path} returned non-JSON body: ${text.slice(0, 200)}`)
+        const message = response.ok
+          ? `Layerswap ${method} ${path} returned non-JSON body: ${text.slice(0, 200)}`
+          : `Layerswap ${method} ${path} responded ${response.status}: ${text.slice(0, 200)}`
+        throw this._buildResponseError(message, `HTTP_${response.status}`, response.ok ? 500 : response.status, options)
       }
     }
 
     if (!response.ok || (envelope && envelope.error)) {
       const code = envelope?.error?.code ?? `HTTP_${response.status}`
       const message = envelope?.error?.message ?? response.statusText ?? 'Unknown Layerswap error.'
-      const err = new Error(`Layerswap ${method} ${path} failed [${code}]: ${message}`)
-      err.code = code
-      err.status = response.status
-      throw err
+      // An error envelope on a 2xx response is unexpected; treat it as a server-side failure.
+      const status = response.ok ? 500 : response.status
+      throw this._buildResponseError(`Layerswap ${method} ${path} failed [${code}]: ${message}`, code, status, options)
     }
 
     return envelope ? envelope.data : null
   }
 
   /**
+   * Maps a failed Layerswap response to the matching WDK error, decorated with
+   * Layerswap's error `code` and the HTTP `status`.
+   *
    * @private
-   * @param {Record<string, unknown>} params
+   * @param {string} message
+   * @param {string} code
+   * @param {number} status
+   * @param {LayerswapRequestOptions} options
+   * @returns {LayerswapApiError}
+   */
+  _buildResponseError (message, code, status, { notFoundAsNoSuchElement = false, clientErrorAsProviderError = false }) {
+    let err
+    if (status === 401 || status === 403 || status === 408 || status === 429 || status === 504) {
+      err = new ProviderError(message, { reason: getProviderErrorReason(status) })
+    } else if (notFoundAsNoSuchElement && (status === 404 || (status === 400 && /not found/i.test(message)))) {
+      // Layerswap answers some lookups of unknown resources with a 400 'UNEXPECTED_ERROR'
+      // ("Swap … is not found") instead of a 404.
+      err = new NoSuchElementError(message)
+    } else if (status >= 400 && status < 500 && !clientErrorAsProviderError) {
+      err = new ValueError(message)
+    } else {
+      err = new ProviderError(message, { reason: getProviderErrorReason(status) })
+    }
+
+    return Object.assign(err, { code, status })
+  }
+
+  /**
+   * @private
+   * @param {LayerswapQueryParams} params
    * @returns {string}
    */
   _buildQueryString (params) {
