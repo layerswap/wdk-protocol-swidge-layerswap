@@ -1,6 +1,6 @@
 {
   "name": "@layerswap/wdk-protocol-swidge-layerswap-solana",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0",
   "description": "WDK Swidge module that lets @tetherto/wdk-wallet-solana wallet accounts swap and bridge tokens across chains via the Layerswap public API, using the ISwidgeProtocol interface.",
   "keywords": [
     "wdk",

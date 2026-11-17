@@ -1,6 +1,6 @@
 {
   "name": "@layerswap/wdk-protocol-swidge-layerswap-bitcoin",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0",
   "description": "WDK Swidge module that lets @tetherto/wdk-wallet-btc wallet accounts swap and bridge bitcoin across chains via the Layerswap public API, using the ISwidgeProtocol interface.",
   "keywords": [
     "wdk",

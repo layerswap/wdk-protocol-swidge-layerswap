@@ -1,6 +1,6 @@
 {
   "name": "@layerswap/wdk-protocol-swidge-layerswap-core",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0",
   "description": "Chain-agnostic Layerswap HTTP client and network/decimal helpers shared by every @layerswap/wdk-protocol-swidge-layerswap-<vm> sibling package.",
   "keywords": [
     "wdk",
